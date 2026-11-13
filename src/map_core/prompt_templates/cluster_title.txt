@@ -1,0 +1,31 @@
+ROLE
+You extract a concise, human-readable Cluster Title from a QA paragraph describing a deviation cluster, supported by representative examples.
+
+INPUT
+{CLUSTER_PARAGRAPH}
+
+GOAL
+Return ONLY a single-line title that names the Primary Center and, where strongly supported, the most unifying qualifier(s) that explain why these deviations belong together.
+
+EXTRACTION STEPS
+1) Identify the **Primary Center** explicitly stated or implied in the first sentence (equipment / step / material / product / room / shift).
+2) From the paragraph, select the top 1–2 **dominant qualifiers** that drive clustering, based only on clearly repeated and well-supported signals:
+   - Failure mode (e.g., “Loose Crimp”)
+   - Specific equipment/line/room (e.g., “Line 3”, “Room A12”)
+   - Step or product family (e.g., “Vial Crimping”, “Product X Family”)
+   - Time/shift only if repeatedly central (e.g., “Night Shift”)
+3) Prefer qualifiers that are explicitly supported by multiple records or cited signals; avoid weak or inferred qualifiers.
+4) Exclude outliers, secondary themes, and any signals marked as uncertain or infrequent.
+
+FORMATTING RULES
+- 6–12 words, Title Case, no terminal period.
+- Structure: **<Primary Center> — <Key Qualifier(s)> Deviations**
+- Use precise, domain-specific terminology (e.g., “Capper”, “Tablet Press”) where supported.
+- No quotes, no CAPA language, no recommendations, no dates/lots unless clearly central.
+
+AMBIGUITY RULE
+If qualifiers are weak, conflicting, or not clearly supported, output only:
+**<Primary Center> — Deviations**
+
+OUTPUT
+Only the title string.

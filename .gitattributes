@@ -1,0 +1,2 @@
+# Keep the complete source CSV in the repository using Git Large File Storage.
+data/sources/trackwise_records.csv filter=lfs diff=lfs merge=lfs -text
