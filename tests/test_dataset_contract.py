@@ -27,7 +27,9 @@ def test_dataset_preserves_identity_source_and_does_not_fabricate_missing_values
     assert row['daysOpen'] is None and row['monthCounts']=={}
     assert result['clusters'][0]['match']==91
     assert 'capa' not in result['clusters'][0]
-    assert set(result)=={'clusters','records','months','refreshedAt'}
+    assert set(result)=={'clusters','records','months','refreshedAt','analysis'}
+    assert row['similarity']==.91 and row['warnings']
+    assert result['analysis']['recordCount']==1
 
 
 def test_source_snapshot_fields_dates_and_duplicates_are_preserved(tmp_path,monkeypatch,payload):
@@ -54,10 +56,51 @@ def test_source_snapshot_fields_dates_and_duplicates_are_preserved(tmp_path,monk
     assert different['records'][0]['criticality']=='Not provided'
 
 
+def test_source_sections_preserve_exact_fields_without_parsing_body_headings(payload):
+    original = {
+        'detailed_description': '  Lot AB-123; 20 mL on 12-May-2025.\r\nINVESTIGATION:\nThis heading belongs to the description.  ',
+        'investigation': 'Résultat: 未確認\n\n1. TEST-42\n2. 20 µL <literal text>',
+        'conclusion': 'Original conclusion.\n',
+        'background_information': '',
+    }
+    payload['records'][0]['source'] = original
+    with patch.object(runs, 'results', return_value=payload), TestClient(app) as client:
+        response = client.get('/api/v1/map/runs/' + 'b'*32 + '/dataset')
+    assert response.status_code == 200
+    record = response.json()['records'][0]
+    assert record['sourceSections'] == [
+        {'key': key, 'label': label, 'text': original[key]}
+        for key, label in [('detailed_description', 'Description'), ('investigation', 'Investigation'), ('conclusion', 'Conclusion')]
+    ]
+    assert record['sourceNarrative'] == '\n\n'.join(key.upper() + ':\n' + value for key, value in original.items() if value)
+
+
+def test_empty_source_has_no_fabricated_sections(payload):
+    payload['records'][0]['source'] = {}
+    with patch.object(runs, 'results', return_value=payload):
+        record = dashboard.dataset('b'*32)['records'][0]
+    assert record['sourceSections'] == [] and record['sourceNarrative'] == ''
+
+
 def test_empty_completed_dataset_is_valid(payload):
     payload.update(records=[],clusters=[])
     with patch.object(runs,'results',return_value=payload):result=dashboard.dataset('b'*32)
     assert result['records']==result['clusters']==result['months']==[]
+
+
+def test_chart_label_is_an_excerpt_without_rewriting_historical_content(payload):
+    group = payload['clusters'][0]
+    title = 'HPLC/UPLC Analytical Systems — System Suitability And Operational Failure Deviations'
+    summary = 'Lot AB-123; 20 mL; event on 12-May-2025. Primary Center=HPLC; Key Signals="AB-123"; Secondary="20 mL"; Confidence=High'
+    group.update(historicalTitle=title, historicalSummary=summary)
+    with patch.object(runs, 'results', return_value=payload):
+        cluster = dashboard.dataset('b'*32)['clusters'][0]
+    assert cluster['shortTitle'] == 'HPLC/UPLC Analytical Systems'
+    assert cluster['title'] == cluster['subtitle'] == title
+    assert cluster['context'] == summary
+    assert cluster['match'] == 91
+    unbroken = 'X' * 100
+    assert dashboard.compact_title(unbroken) == 'X' * 63 + '…'
 
 
 def test_incomplete_dataset_is_not_published(payload):
@@ -72,7 +115,7 @@ def test_configured_dataset_contract_and_no_additional_services(monkeypatch,payl
         assert response.status_code==200 and response.json()['records'][0]['id']=='001'
         assert client.get('/api/v1/match/health').status_code==404
         assert client.get('/api/v1/author/health').status_code==404
-        assert client.post('/api/v1/map/runs/'+('b'*32)+'/annotations',json={}).status_code==404
+        assert client.post('/api/v1/map/runs/'+('b'*32)+'/annotations',json={}).status_code==405
 
 
 def test_missing_run_is_visible_and_does_not_return_sample_data(monkeypatch):

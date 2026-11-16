@@ -7,7 +7,9 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
 from capa_map.infrastructure.web import create_service
-from .application import runs
+from .application import annotations, runs
+from .schemas import Annotation, AnnotationCollection, MapDataset
+from filelock import Timeout
 
 app = create_service('map')
 
@@ -55,6 +57,34 @@ class ReviewRequest(BaseModel):
 
 class ImportRequest(BaseModel):
     key: str | None = None
+
+
+class AnnotationRequest(BaseModel):
+    assessment: Literal['', 'Supports pattern', 'Mixed / unclear', 'Does not support', 'Insufficient information']
+    note: str = Field(default='', max_length=10000)
+    expected_revision: int = Field(ge=0)
+
+
+@app.get('/api/v1/map/runs/{run_id}/annotations', response_model=AnnotationCollection)
+def record_annotations(run_id: str):
+    try:
+        return {'records': annotations.read(run_id)}
+    except Timeout as error:
+        raise HTTPException(409, detail='Another annotation save is in progress. Please retry.') from error
+    except (ValueError, FileNotFoundError) as error:
+        missing(error)
+
+
+@app.put('/api/v1/map/runs/{run_id}/records/{record_id}/annotation', response_model=Annotation)
+def save_annotation(run_id: str, record_id: str, request: AnnotationRequest):
+    try:
+        return annotations.save(run_id, record_id, request.assessment, request.note, request.expected_revision)
+    except runs.RunBusyError as error:
+        raise HTTPException(409, detail=str(error)) from error
+    except Timeout as error:
+        raise HTTPException(409, detail='Another annotation save is in progress. Please retry.') from error
+    except (ValueError, FileNotFoundError) as error:
+        missing(error)
 
 
 def missing(error):
@@ -164,13 +194,29 @@ def download_results(run_id: str, kind: str = 'draft'):
         missing(error)
 
 
-# The supplied frontend calls this single presentation endpoint.
-@app.get('/map/dataset')
+@app.get('/api/v1/map/runs/{run_id}/dataset', response_model=MapDataset)
+def analysis_dataset(run_id: str):
+    """The same frontend contract for an explicitly selected completed run."""
+    from .application import dashboard
+    try:
+        return dashboard.dataset(run_id)
+    except runs.RunBusyError as error:
+        raise HTTPException(409, detail=str(error)) from error
+    except Timeout as error:
+        raise HTTPException(409, detail='Annotations are being updated. Please retry.') from error
+    except (ValueError, FileNotFoundError) as error:
+        missing(error)
+
+
+# The supplied frontend defaults to the configured/latest completed analysis.
+@app.get('/map/dataset', response_model=MapDataset)
 def frontend_dataset():
     from .application import dashboard
     try:
         return dashboard.current_dataset()
     except runs.RunBusyError as error:
         raise HTTPException(409, detail=str(error)) from error
+    except Timeout as error:
+        raise HTTPException(409, detail='Annotations are being updated. Please retry.') from error
     except (ValueError, FileNotFoundError) as error:
         raise HTTPException(503, detail=str(error)) from error
