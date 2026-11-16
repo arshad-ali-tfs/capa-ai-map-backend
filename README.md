@@ -163,20 +163,48 @@ Invoke-RestMethod "http://127.0.0.1:8101/api/v1/map/runs/$($run.run_id)"
 
 Poll until `completed`, then inspect that run's `/dataset`, `/results` or download. `limit: 0` selects all eligible records; use a small selection when checking a new setup. Failed runs retain status and a worker log.
 
-| Endpoint | Purpose |
+**Complete API inventory: 21 method-and-path operations, checked against this service's generated OpenAPI schema.** Each row links to its request parameters, response, saved changes and errors in the [detailed API reference](docs/API.md). GET and POST on the same URL count separately.
+
+### Service and source APIs
+
+| Method and path | Function |
 |---|---|
-| `GET /api/v1/map/health` | Process liveness |
-| `GET /api/v1/map/ready` | Source availability; does not run models |
-| `GET /api/v1/map/source` | Source identity and row accounting |
-| `POST /api/v1/map/runs` | Start an analysis |
-| `GET /api/v1/map/runs/{run_id}` | Progress/status |
-| `POST /api/v1/map/runs/{run_id}/cancel` | Request cancellation |
-| `GET /map/dataset` | Configured/latest completed analysis for the frontend |
-| `GET /api/v1/map/runs/{run_id}/dataset` | Presentation contract for a particular completed analysis |
-| `GET /api/v1/map/runs/{run_id}/download?kind=draft` | Download the result CSV |
-| `POST /api/v1/map/runs/{run_id}/review` | Cluster-summary review decisions |
-| `GET /api/v1/map/runs/{run_id}/annotations` | Read record annotations |
-| `PUT /api/v1/map/runs/{run_id}/records/{record_id}/annotation` | Save an assessment/note with an expected revision |
+| [`GET /api/v1/map/health`](docs/API.md#get-api-v1-map-health) | Check that the API process responds. |
+| [`GET /api/v1/map/ready`](docs/API.md#get-api-v1-map-ready) | Check that the configured source snapshot is available. |
+| [`GET /api/v1/map/source`](docs/API.md#get-api-v1-map-source) | Inspect which source export this instance uses. |
+| [`GET /api/v1/map/source/quarantine`](docs/API.md#get-api-v1-map-source-quarantine) | Inspect source rows held aside during import, for example duplicate IDs. |
+| [`GET /api/v1/map/records`](docs/API.md#get-api-v1-map-records) | Browse accepted records in the imported source. |
+| [`GET /api/v1/map/records/{pr_id}`](docs/API.md#get-api-v1-map-records-pr-id) | Open an accepted source record by its original PR ID. |
+
+### Analysis APIs
+
+| Method and path | Function |
+|---|---|
+| [`GET /api/v1/map/options`](docs/API.md#get-api-v1-map-options) | Discover run defaults, limits and supported choices before building a form. |
+| [`GET /api/v1/map/runs/legacy-catalog`](docs/API.md#get-api-v1-map-runs-legacy-catalog) | List retained validation runs that can be imported. |
+| [`POST /api/v1/map/runs/import-legacy`](docs/API.md#post-api-v1-map-runs-import-legacy) | Copy retained validation artifacts into this service's run history. |
+| [`GET /api/v1/map/runs`](docs/API.md#get-api-v1-map-runs) | List the most recent analyses. |
+| [`POST /api/v1/map/runs`](docs/API.md#post-api-v1-map-runs) | Queue a new extraction and clustering analysis. |
+| [`GET /api/v1/map/runs/{run_id}`](docs/API.md#get-api-v1-map-runs-run-id) | Poll one analysis and inspect progress or failure details. |
+| [`POST /api/v1/map/runs/{run_id}/cancel`](docs/API.md#post-api-v1-map-runs-run-id-cancel) | Stop a queued or running analysis. |
+
+### Read results and downloads
+
+| Method and path | Function |
+|---|---|
+| [`GET /api/v1/map/runs/{run_id}/results`](docs/API.md#get-api-v1-map-runs-run-id-results) | Inspect analysis records, cluster summaries and diagnostics. |
+| [`GET /api/v1/map/runs/{run_id}/explorer`](docs/API.md#get-api-v1-map-runs-run-id-explorer) | Read the same explorer result through its alternate route. |
+| [`GET /api/v1/map/runs/{run_id}/dataset`](docs/API.md#get-api-v1-map-runs-run-id-dataset) | Load one completed analysis in the frontend presentation format. |
+| [`GET /map/dataset`](docs/API.md#get-map-dataset) | Load the analysis selected for the current MAP dashboard. |
+| [`GET /api/v1/map/runs/{run_id}/download`](docs/API.md#get-api-v1-map-runs-run-id-download) | Download a retained artifact selected by kind. |
+
+### Save reviews
+
+| Method and path | Function |
+|---|---|
+| [`POST /api/v1/map/runs/{run_id}/review`](docs/API.md#post-api-v1-map-runs-run-id-review) | Save cluster-summary review decisions for a completed run. |
+| [`GET /api/v1/map/runs/{run_id}/annotations`](docs/API.md#get-api-v1-map-runs-run-id-annotations) | Read saved record-level reviewer assessments and notes. |
+| [`PUT /api/v1/map/runs/{run_id}/records/{record_id}/annotation`](docs/API.md#put-api-v1-map-runs-run-id-records-record-id-annotation) | Save one record's assessment/note with revision checking. |
 
 Annotation writes contain `assessment`, `note` and `expected_revision`; zero means no prior annotation. HTTP **409** rejects a stale revision. Reload before retrying. Record annotations are separate from cluster-summary approvals.
 
