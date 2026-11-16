@@ -1,5 +1,7 @@
 # Databricks Apps deployment preparation
 
+For this service's standalone Docker image and local container startup, see [DOCKER.md](DOCKER.md). The Docker and Databricks Apps deployment paths are verified separately.
+
 These instructions cover the standalone MAP backend and common frontend repositories. MATCH and AUTHOR have their own separate backend repositories and deployment guides.
 
 1. Publish this project folder as its own repository when requested. The named source export data/sources/trackwise_records.csv is included through Git LFS; install Git LFS before adding/committing it and run git lfs pull after cloning. Keep .env, dependencies, caches, generated databases, run outputs and model artifacts out of the repository.

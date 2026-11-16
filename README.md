@@ -1,5 +1,7 @@
 # CAPA.AI MAP backend
 
+Docker: [independent image, one-command startup and storage setup](DOCKER.md).
+
 Independent FastAPI backend for MAP. The [common React frontend](https://github.com/rahul-jha-tfs/capa-ai-frontend) is a separate repository and calls GET /map/dataset.
 
 ## Run locally
