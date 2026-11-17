@@ -96,6 +96,8 @@ cd capa-ai-map-backend
 
 Skip the clone steps if you already have the repository. **Setup pulls the source, BGE checkpoint/tokenizer and saved UMAP/FAISS bundle from this repository through Git LFS.** It verifies file sizes and SHA-256 checksums, creates `.venv`, installs pinned dependencies including the spaCy English model, creates `.env` if absent, and imports the bundled source on first setup. An existing source configuration and pinned dashboard run are preserved when setup is repeated without `-Source`.
 
+On Windows, clone into a short location such as `C:\dev\capa-ai-map-backend`. The model cache has nested directories; on machines without Windows long-path support, a deeply nested checkout can exceed the path limit even when Git's long-path setting is enabled.
+
 Another workbook can be supplied with `.\Setup-Map.ps1 -Source "C:\data\export.xlsx" -Sheet "Sheet1"`. Git LFS must be installed and able to access the repository. The initial runtime download is approximately 2 GB; later pulls reuse unchanged files. Do not use GitHub's **Download ZIP** as a substitute for the Git LFS checkout.
 
 Before starting a new analysis:
