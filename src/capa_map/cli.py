@@ -27,7 +27,7 @@ def serve():
     uvicorn.run('capa_map.main:app', host=os.getenv('MAP_HOST', '127.0.0.1'), port=int(os.getenv('MAP_PORT', os.getenv('DATABRICKS_APP_PORT', '8101'))))
 
 
-def import_source():
+def import_source(argv=None):
     configure()
     from capa_map.infrastructure.data.importer import import_snapshot
     from capa_map.infrastructure.data.repository import SqliteRecordRepository
@@ -35,7 +35,7 @@ def import_source():
     parser = argparse.ArgumentParser(description='Import a MAP source CSV/XLSX without model calls.')
     parser.add_argument('source', type=Path)
     parser.add_argument('--sheet')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     data = Path(os.environ['CAPA_DATA_DIR']) / 'sources'
     snapshot = import_snapshot(args.source, data, sheet=args.sheet)
     metadata = SqliteRecordRepository(snapshot).metadata()

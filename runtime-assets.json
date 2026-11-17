@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "embedding_model": "BAAI/bge-large-en-v1.5",
+  "embedding_revision": "d4aa6901d3a41ba39fb536a557fa166f842b0e09",
+  "files": [
+    {
+      "path": "data/sources/trackwise_records.csv",
+      "size_bytes": 121397555,
+      "sha256": "475eb66c11a4af2b506aab869cd20b88748243d896e8414affc59387ba74d840"
+    },
+    {
+      "path": "data/assets/dpd_cluster_merge_2026-08-25 06&#x3a;29.pkl",
+      "size_bytes": 5,
+      "sha256": "926248e52d1fa532c317e37da24ed652ae64110f8219cb5e061668bd3091f048"
+    },
+    {
+      "path": "data/assets/dpd_faiss_centroid_index_2026-08-25 06&#x3a;29.faiss",
+      "size_bytes": 4397,
+      "sha256": "e1d88755acecac671393430c15ef1bee8f5a7b7bee56cc08bac9ebc08fcbb74a"
+    },
+    {
+      "path": "data/assets/dpd_faiss_kmeans_centroids_2026-08-25 06&#x3a;29.pkl",
+      "size_bytes": 4353,
+      "sha256": "99b1ded1261da9a337ab7da8e05f59803964397d06822de15fc5962ac8f438bc"
+    },
+    {
+      "path": "data/assets/DPD_PERSISTED_MODEL_MANIFEST.json",
+      "size_bytes": 1163,
+      "sha256": "c780e495f3841baae621efe4ab6adbcbc2b749615b88b3565b7cec5d91e1c6ef"
+    },
+    {
+      "path": "data/assets/dpd_umap_model_verified.pkl",
+      "size_bytes": 554794352,
+      "sha256": "e335a733535a4cb88e1576fd8fb10c12a4c3aab5985ddc0bb503d89e582bfd14"
+    },
+    {
+      "path": "data/assets/dpd_umap_select_cols_2026-08-25 06&#x3a;29.pkl",
+      "size_bytes": 216,
+      "sha256": "ee207eabbbd2ba89f0ab6afe64b2e3ec2635de03737df8a420fde90b80fef415"
+    },
+    {
+      "path": "data/assets/MAP_DPD_500_5W1H_and_Embeddings.csv",
+      "size_bytes": 6772799,
+      "sha256": "f35854c6c9bb58f0a96c1c877e03a9950856e4bb6fc4e26965cec66201074ea6"
+    },
+    {
+      "path": "data/assets/MAP_DPD_500_Reference_Cluster_Results.csv",
+      "size_bytes": 800249,
+      "sha256": "b01618935b56131c745409e58528197087d1982681912e862f776ae0e8f268a9"
+    },
+    {
+      "path": "data/models/huggingface/hub/models--BAAI--bge-large-en-v1.5/refs/main",
+      "size_bytes": 40,
+      "sha256": "bc0882c135a4173bccc2d530ad7821235d8c0a951d05414e840b739a1f056a99"
+    },
+    {
+      "path": "data/models/huggingface/hub/models--BAAI--bge-large-en-v1.5/snapshots/d4aa6901d3a41ba39fb536a557fa166f842b0e09/1_Pooling/config.json",
+      "size_bytes": 191,
+      "sha256": "e54c164a07274f2eb45bb724f54a79d1efcc90c41573887cd9a29aeee0597352"
+    },
+    {
+      "path": "data/models/huggingface/hub/models--BAAI--bge-large-en-v1.5/snapshots/d4aa6901d3a41ba39fb536a557fa166f842b0e09/config.json",
+      "size_bytes": 779,
+      "sha256": "446712fac367857b4b1302762fe1cd7bfa8b3c4b77b4dc5d77c4025407660896"
+    },
+    {
+      "path": "data/models/huggingface/hub/models--BAAI--bge-large-en-v1.5/snapshots/d4aa6901d3a41ba39fb536a557fa166f842b0e09/config_sentence_transformers.json",
+      "size_bytes": 124,
+      "sha256": "940d5f50db195fa6e5e6a4f122c095f77880de259d74b14a65779ed48bdd7c56"
+    },
+    {
+      "path": "data/models/huggingface/hub/models--BAAI--bge-large-en-v1.5/snapshots/d4aa6901d3a41ba39fb536a557fa166f842b0e09/model.safetensors",
+      "size_bytes": 1340616616,
+      "sha256": "45e1954914e29bd74080e6c1510165274ff5279421c89f76c418878732f64ae7"
+    },
+    {
+      "path": "data/models/huggingface/hub/models--BAAI--bge-large-en-v1.5/snapshots/d4aa6901d3a41ba39fb536a557fa166f842b0e09/modules.json",
+      "size_bytes": 349,
+      "sha256": "84e40c8e006c9b1d6c122e02cba9b02458120b5fb0c87b746c41e0207cf642cf"
+    },
+    {
+      "path": "data/models/huggingface/hub/models--BAAI--bge-large-en-v1.5/snapshots/d4aa6901d3a41ba39fb536a557fa166f842b0e09/README.md",
+      "size_bytes": 94607,
+      "sha256": "9ffeb4467f293416c1f7642e64ae0bd44778fa182ce1165196e8a0329a34fd80"
+    },
+    {
+      "path": "data/models/huggingface/hub/models--BAAI--bge-large-en-v1.5/snapshots/d4aa6901d3a41ba39fb536a557fa166f842b0e09/sentence_bert_config.json",
+      "size_bytes": 52,
+      "sha256": "84e39fda68ccbff05bfa723ae9c0e70e23e2ec373b76e0f8c6e71af72a693cbf"
+    },
+    {
+      "path": "data/models/huggingface/hub/models--BAAI--bge-large-en-v1.5/snapshots/d4aa6901d3a41ba39fb536a557fa166f842b0e09/special_tokens_map.json",
+      "size_bytes": 125,
+      "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+    },
+    {
+      "path": "data/models/huggingface/hub/models--BAAI--bge-large-en-v1.5/snapshots/d4aa6901d3a41ba39fb536a557fa166f842b0e09/tokenizer.json",
+      "size_bytes": 711396,
+      "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+    },
+    {
+      "path": "data/models/huggingface/hub/models--BAAI--bge-large-en-v1.5/snapshots/d4aa6901d3a41ba39fb536a557fa166f842b0e09/tokenizer_config.json",
+      "size_bytes": 366,
+      "sha256": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3"
+    },
+    {
+      "path": "data/models/huggingface/hub/models--BAAI--bge-large-en-v1.5/snapshots/d4aa6901d3a41ba39fb536a557fa166f842b0e09/vocab.txt",
+      "size_bytes": 231508,
+      "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"
+    }
+  ]
+}

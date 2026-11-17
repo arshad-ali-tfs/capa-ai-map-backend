@@ -89,26 +89,27 @@ Install Git, Git LFS and **Python 3.11, 64-bit**, then:
 
 ```powershell
 git lfs install
-git clone https://github.com/rahul-jha-tfs/capa-ai-map-backend.git
+git clone -c core.longpaths=true https://github.com/rahul-jha-tfs/capa-ai-map-backend.git
 cd capa-ai-map-backend
-git lfs pull
-.\Setup-Map.ps1 -Source ".\data\sources\trackwise_records.csv"
+.\Setup-Map.ps1
 ```
 
-Skip the clone steps if you already have the repository. Setup creates `.venv`, installs pinned dependencies, creates `.env` if absent, and imports the source. Another workbook can be supplied with `-Source "C:\data\export.xlsx" -Sheet "Sheet1"`.
+Skip the clone steps if you already have the repository. **Setup pulls the source, BGE checkpoint/tokenizer and saved UMAP/FAISS bundle from this repository through Git LFS.** It verifies file sizes and SHA-256 checksums, creates `.venv`, installs pinned dependencies including the spaCy English model, creates `.env` if absent, and imports the bundled source on first setup. An existing source configuration and pinned dashboard run are preserved when setup is repeated without `-Source`.
+
+Another workbook can be supplied with `.\Setup-Map.ps1 -Source "C:\data\export.xlsx" -Sheet "Sheet1"`. Git LFS must be installed and able to access the repository. The initial runtime download is approximately 2 GB; later pulls reuse unchanged files. Do not use GitHub's **Download ZIP** as a substitute for the Git LFS checkout.
 
 Before starting a new analysis:
 
-1. Obtain the trusted MAP bundle and put it in `data/assets`: persisted UMAP model, FAISS index/centroids, merge/column files, `DPD_PERSISTED_MODEL_MANIFEST.json` and both `MAP_DPD_500_*` reference CSVs. Setup does not download these trained assets.
-2. Provision the BGE cache under `data/models/huggingface`. The default environment uses offline model loading.
-3. Edit `.env` with the model endpoint and key. Import fills the source paths. Leave `MAP_DASHBOARD_RUN_ID` blank for a new installation until a completed run exists.
-4. Run `Start-Map.ps1`, then create a small analysis through the API as shown below.
+1. Edit `.env` with your model endpoint and `OPENAI_API_KEY`. Import fills the source paths. Leave `MAP_DASHBOARD_RUN_ID` blank on a new installation until a completed run exists.
+2. Run `.\Start-Map.ps1`, then create a small analysis through the API as shown below.
 
-A clone includes the Git LFS source CSV. **It does not include API keys, model assets, generated snapshots or the existing saved 40-record analysis.** Complete an analysis before expecting the dashboard to show results.
+No separate model-file handover or Hugging Face download is needed. The default configuration loads the bundled BGE revision offline. [Runtime asset details](docs/RUNTIME_ASSETS.md) describe the included files and verification command; [third-party notices](THIRD_PARTY_NOTICES.md) retain model attribution.
+
+**API keys, generated snapshots, saved analyses and reviewer notes are not included.** Setup creates the source snapshot locally. Complete an analysis before expecting the dashboard to show results; the existing local 40-record analysis is not shared through Git.
 
 ### First setup with Docker
 
-Docker does not require host Python. Follow [DOCKER.md](DOCKER.md) for container-side source import, asset provisioning, and creation of `.env.docker` from [docker.env.example](docker.env.example). Container paths use `/data/...`; Windows `.env` paths cannot be copied unchanged.
+Docker does not require host Python. Follow [DOCKER.md](DOCKER.md) to pull the same bundled assets with Git LFS, import the source in the container, and create `.env.docker` from [docker.env.example](docker.env.example). Container paths use `/data/...`; Windows `.env` paths cannot be copied unchanged.
 
 After preparation, `Start-Docker.ps1` builds a missing image and starts MAP. Rebuild after code changes with:
 
@@ -218,7 +219,7 @@ The reference workstation has **19,643 accepted source records**; its pinned das
 |---|---|---|
 | `data/sources/trackwise_records.csv` | Named source export | Yes, Git LFS |
 | `data/sources/<snapshot-id>.sqlite3` and `.csv` | Imported source version and matching export | No |
-| `data/assets/`, `data/models/` | Clustering assets and BGE cache | No |
+| `data/assets/`, pinned BGE files under `data/models/` | Clustering bundle, reference files and exact BGE revision | Yes; large files use Git LFS |
 | `data/map-runs/<run-id>/` | Request, progress, extraction, assignments, summaries, validation and logs | No |
 | Run folder's `record_annotations.json` | Notes, revisions and annotation history | No |
 
@@ -256,7 +257,7 @@ For Docker, use `docker logs capa-ai-map` and the checks in [DOCKER.md](DOCKER.m
 |---|---|
 | Source unavailable / HTTP 503 | Import the CSV; verify both source paths in the host/container environment |
 | No dataset / completed analysis | Finish a run; check `MAP_DASHBOARD_RUN_ID` references an available completed run or is blank |
-| Offline model cannot load | Provision BGE and the trusted model bundle; package installation does not provide them |
+| Offline model cannot load | Run `git lfs pull`, then `.venv\Scripts\python.exe -m capa_map.bootstrap`; verify `HF_HOME` and `MAP_ASSETS_DIR` point to this checkout's data |
 | Model endpoint error | Set an actual endpoint, model and key; blank `OPENAI_BASE_URL` is not a working MAP configuration |
 | Frontend cannot reach MAP | Check port 8101 and the frontend's `MAP_API_TARGET` |
 | CSV is an LFS pointer | Run `git lfs pull` before import |

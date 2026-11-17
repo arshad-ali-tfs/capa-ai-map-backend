@@ -7,12 +7,14 @@ This repository builds one independent Linux/amd64 image using Python 3.11 and t
 Install Docker Desktop with its Linux engine (or Docker Engine on Linux). From this repository:
 
 ~~~powershell
+git lfs install
+git lfs pull
 Copy-Item docker.env.example .env.docker
 ~~~
 
 Edit `.env.docker` with container paths and service settings. For example, a host file under `data/sources/` appears under `/data/sources/` in the container. Do not copy Windows paths or shell quotes into this file. Keys stay in this ignored local file and are injected at runtime.
 
-Fetch the source CSV with `git lfs pull` when using the bundled source. Prepare the snapshot and service assets described below. The build context excludes source exports, databases, model caches, runs, local environments, Git history and credentials.
+Git LFS downloads the source CSV, pinned BGE checkpoint/tokenizer and saved UMAP/FAISS bundle directly from this repository. No separate model-file handover is required. Prepare the source snapshot as described below and configure the model endpoint/key in `.env.docker`. The initial runtime download is approximately 2 GB. The build context excludes source exports, databases, model caches, runs, local environments, Git history and credentials; runtime files are provided through the data mount.
 
 ## One command to start this service
 
@@ -56,13 +58,15 @@ For a fresh folder, build the image first, place the CSV in `data/sources/trackw
 
 ~~~powershell
 docker build --platform linux/amd64 --tag capa-ai-map:local .
+$repoPath = (Resolve-Path .).Path
 $dataPath = (Resolve-Path .\data).Path
+docker run --rm --mount "type=bind,source=$repoPath,target=/checkout,readonly" capa-ai-map:local python /checkout/src/capa_map/bootstrap.py --root /checkout
 docker run --rm --env-file .env.docker --mount "type=bind,source=$dataPath,target=/data" capa-ai-map:local map-import /data/sources/trackwise_records.csv
 ~~~
 
-Use `--sheet Sheet1` for an XLSX workbook as needed. The import prints the snapshot ID. Set the two `CAPA_SOURCE_*` paths in the host `.env.docker` to the generated `/data/sources/<id>.sqlite3` and `/data/sources/<id>.csv` files. Import commands write a container-local `/app/.env`; that file is temporary and does not update the host configuration automatically.
+The verification command checks all bundled files before models are loaded; stop and fix any failure before running the import. Use `--sheet Sheet1` for an XLSX workbook as needed. The import prints the snapshot ID. Set the two `CAPA_SOURCE_*` paths in the host `.env.docker` to the generated `/data/sources/<id>.sqlite3` and `/data/sources/<id>.csv` files. Import commands write a container-local `/app/.env`; that file is temporary and does not update the host configuration automatically.
 
-Mount the trusted UMAP/FAISS bundle at `/data/assets` and BGE cache at `/data/models/huggingface`. The spaCy English model and CPU-only Torch are installed during the image build at the existing versions. Validate persisted models on Linux before using them for new analyses; a health probe does not validate model compatibility.
+The standard data mount already exposes the pulled UMAP/FAISS bundle at `/data/assets` and BGE cache at `/data/models/huggingface`; the provided environment template points there. The spaCy English model and CPU-only Torch are installed during the image build at the existing versions. Validate persisted models on Linux before using them for new analyses; a health probe does not validate model compatibility.
 
 MAP outputs, cluster-summary reviews and record annotations live under `/data/map-runs`. Retain and back up the complete directory. Existing historical results may be reused for display when their source snapshot is available; generating a fresh analysis requires the model assets and configured model endpoint/key. Set `MAP_DASHBOARD_RUN_ID` to a mounted completed run when pinning the UI.
 
