@@ -14,26 +14,17 @@ The repository contains the files needed to run the existing MAP pipeline. There
 
 The BGE revision is `d4aa6901d3a41ba39fb536a557fa166f842b0e09`. Its Hugging Face cache layout and `refs/main` are retained so the unchanged pipeline resolves `BAAI/bge-large-en-v1.5` in offline mode. Unrelated cached models, lock files and temporary cache markers are excluded.
 
-## First setup
+## First setup and verification
 
-Install Git, Git LFS and 64-bit Python 3.11.5 or newer within the 3.11 series, clone the repository and run the following. On Windows, use a short checkout location such as `C:\dev\capa-ai-map-backend`. The README's clone command also enables Git long paths; Git's setting alone does not remove Windows/Python path limits when OS long-path support is disabled.
-
-```powershell
-.\Setup-Map.ps1
-```
-
-Setup fetches the required LFS files, checks the full runtime inventory, installs dependencies and imports the bundled source if no source is configured. Repeating setup preserves an existing source configuration and pinned dashboard run. An explicit `-Source` imports a different export and clears the dashboard pin as before.
-
-Configure your own model endpoint/key in `.env`, then run `.\Start-Map.ps1`. Saved analyses and reviewer notes are created locally. They are not copied from another user's workspace. A new installation needs a completed pipeline run before the frontend can display analysis results.
-
-For Docker without host Python, follow [DOCKER.md](../DOCKER.md). The same pulled `data` folder is bind-mounted; the image installs its own Python dependencies.
-
-## Verify or repair a checkout
+Start Docker Desktop's Linux engine and run this from a Git clone of the repository:
 
 ```powershell
-git lfs pull
-.\.venv\Scripts\python.exe -m capa_map.bootstrap
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Run-Map.ps1
 ```
+
+The command retrieves missing source/models through Git LFS, builds the image, verifies all files inside Docker, imports the source and tests the real embedding/clustering models before starting live extraction. Python and its dependencies are inside the image; host Python is not required. Use `-PrepareOnly` to stop after offline preparation without making paid API calls. See [the README](../README.md#run-locally) for credentials and lifecycle options.
+
+Saved analyses and reviewer notes are created in the mounted data directory. They are not copied from another user's workspace. A new installation needs a completed pipeline run before the frontend can display results. Existing files that differ from their manifest are rejected rather than silently overwritten.
 
 [runtime-assets.json](../runtime-assets.json) records the relative path, size and SHA-256 of every bundled runtime file. Verification rejects missing files, Git LFS pointer files and changed content before loading any model. Git attributes preserve exact runtime-file bytes on Windows and Linux.
 

@@ -31,6 +31,15 @@ class SourceSection(Contract):
     text: str
 
 
+class FiveWh(Contract):
+    who: str
+    what: str
+    when: str
+    where: str
+    why: str
+    how: str
+
+
 class DeviationRecord(Contract):
     id: str
     clusterId: str
@@ -52,6 +61,7 @@ class DeviationRecord(Contract):
     sourceField: str
     sourceNarrative: str
     sourceSections: list[SourceSection]
+    fiveWh: FiveWh
     matchSignals: list[str]
     similarity: float | None
     warnings: list[str]

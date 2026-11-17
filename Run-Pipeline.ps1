@@ -20,10 +20,10 @@ if ($PSCmdlet.ParameterSetName -eq 'Start') {
     try {
         $ready = Invoke-RestMethod -Uri "$ApiUrl/api/v1/map/ready" -TimeoutSec 30
     } catch {
-        throw "MAP is unavailable at $ApiUrl. Start it with .\Start-Map.ps1 or .\Start-Docker.ps1 and check source readiness. $($_.Exception.Message)"
+        throw "MAP is unavailable at $ApiUrl. Start it with .\Run-Map.ps1 -ServeOnly or .\Start-Docker.ps1 and check source readiness. $($_.Exception.Message)"
     }
     if ($ready.source_ready -ne $true) {
-        throw 'MAP source is not ready. Run Setup-Map.ps1 and check the backend source configuration.'
+        throw 'MAP source is not ready. Run Run-Map.ps1 -PrepareOnly and check the backend source configuration.'
     }
     $selection = if ($Limit -eq 0) { 'all eligible source records' } else { "up to $Limit eligible source records" }
     Write-Host "Starting MAP for $selection, with live extraction and summaries."

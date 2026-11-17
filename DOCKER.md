@@ -2,7 +2,19 @@
 
 This repository builds one independent Linux/amd64 image using Python 3.11 and the existing dependency lock. It starts the existing MAP launcher, without changing models, prompts or business workflows. Other backend repositories are not build inputs.
 
-## Prepare once
+## Recommended: complete setup and pipeline in one command
+
+With Docker Desktop's Linux engine running and access to this private Git repository, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Run-Map.ps1
+```
+
+This is the supported fresh-machine path. It handles downloads, image build, source import, checksum verification, offline model execution, container startup and the full eligible-record pipeline. No host Python is needed. Enter the model endpoint/key when prompted or configure `.env.docker` first. Use `-Limit 5` for a pilot, `-PrepareOnly` for offline setup, `-ServeOnly` for API startup and `-Stop` to stop the managed container. See [README](README.md#run-locally) for persistence, recovery and alternate ports.
+
+The rest of this document describes lower-level Docker commands for developers who intentionally manage the steps separately.
+
+## Manual preparation
 
 Install Docker Desktop with its Linux engine (or Docker Engine on Linux). From this repository:
 
@@ -16,7 +28,7 @@ Edit `.env.docker` with container paths and service settings. For example, a hos
 
 Git LFS downloads the source CSV, pinned BGE checkpoint/tokenizer and saved UMAP/FAISS bundle directly from this repository. No separate model-file handover is required. Prepare the source snapshot as described below and configure the model endpoint/key in `.env.docker`. The initial runtime download is approximately 2 GB. The build context excludes source exports, databases, model caches, runs, local environments, Git history and credentials; runtime files are provided through the data mount.
 
-## One command to start this service
+## Advanced foreground launcher after manual preparation
 
 ~~~powershell
 .\Start-Docker.ps1

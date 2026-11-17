@@ -8,7 +8,7 @@ A deviation is a recorded departure from an expected process. CAPA means correct
 
 | At a glance | Details |
 |---|---|
-| Runtime | Python 3.11.5 or newer within 3.11, 64-bit; FastAPI |
+| Runtime | Docker supplies Python 3.11.18 and FastAPI |
 | Local API | http://127.0.0.1:8101 |
 | Interactive API docs | http://127.0.0.1:8101/docs |
 | Docker image | `capa-ai-map:local` |
@@ -64,64 +64,52 @@ MAP also provides saved analysis history, progress/cancellation, downloadable re
 
 **Reading the results:** similarity measures closeness to a historical cluster, not the probability that an assignment is correct. Cluster membership alone does not establish root cause, severity or product impact. A reviewer note does not change an assignment or update TrackWise.
 
+The record review dataset also supplies the six saved 5W1H outputs (Who, What, When, Where, Why and How). The frontend shows them separately from the original source narrative. Opening a record reads the selected run; it does not regenerate output or incur a model call.
+
+Close scores between the first and second cluster do not trigger `Needs review`. This applies to saved-run presentation and future pipelines. Future exports keep the legacy `close_assignment_review` column as `False` and leave its former threshold blank; raw similarity, score gap and assignments are preserved. Old run files are not rewritten, so their diagnostic close flags may still appear in raw downloads/results. Missing historical cluster descriptions and unassigned records retain specific warnings. No additional LLM explanation calls are made.
+
 ## Run locally
 
-Run commands from **this repository's root** in PowerShell. Choose Docker or native Python for a given port.
-
-### Already configured on this machine
+Use **Docker Desktop with its Linux engine running** and Git with access to this private repository. No host Python, virtual environment or pip installation is needed. Run the following from the MAP backend repository root in PowerShell:
 
 ```powershell
-# Docker Desktop must have its Linux engine running.
-.\Start-Docker.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Run-Map.ps1
 ```
 
-Or use the repo's native Python environment:
+On a fresh machine, first clone the repository into a short path, for example:
 
 ```powershell
-.\Start-Map.ps1
-```
-
-Keep the terminal open. Visit [API docs](http://127.0.0.1:8101/docs); stop with **Ctrl+C**.
-
-### First setup on a new machine: native Python
-
-Install Git, Git LFS and **64-bit Python 3.11.5 or newer within the 3.11 series**, then:
-
-```powershell
-git lfs install
 git clone -c core.longpaths=true https://github.com/rahul-jha-tfs/capa-ai-map-backend.git
 cd capa-ai-map-backend
-.\Setup-Map.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Run-Map.ps1
 ```
 
-Skip the clone steps if you already have the repository. **Setup pulls the source, BGE checkpoint/tokenizer and saved UMAP/FAISS bundle from this repository through Git LFS.** It verifies file sizes and SHA-256 checksums, creates `.venv`, installs pinned dependencies including the spaCy English model, creates `.env` if absent, and imports the bundled source on first setup. An existing source configuration and pinned dashboard run are preserved when setup is repeated without `-Source`.
+Skip cloning if the checkout is already present. Use a Git clone rather than GitHub's source ZIP: the source and models are delivered through Git LFS. The command retrieves missing files, including a verified portable Git LFS executable when necessary.
 
-On Windows, clone into a short location such as `C:\dev\capa-ai-map-backend`. The model cache has nested directories; on machines without Windows long-path support, a deeply nested checkout can exceed the path limit even when Git's long-path setting is enabled.
+**What the command does:** checks Docker, retrieves source/models, builds the image with Python 3.11.18 and the pinned CPU dependencies, verifies all runtime checksums, imports the source, tests the real BGE/UMAP/FAISS path offline, starts the backend container, and runs **all eligible records** with live Sol extraction and live cluster summaries. Every Python step and the pipeline run inside Linux containers. Only Docker orchestration and repository downloads run on Windows.
 
-Setup checks the interpreter's patch version and architecture before downloading the runtime bundle. The dependency lock requires at least Python 3.11.5 because of `soupsieve==4.1`; Python 3.11.0 through 3.11.4 are not supported. Native execution here was verified on Python 3.11.9. Installing a newer Python does not reliably update an existing virtual environment; recreate that environment as described under [Troubleshooting](#troubleshooting).
+The command creates `.env.docker` if needed. Configure your model endpoint and API key there, or enter them when prompted. The API-key prompt is hidden. Existing provider settings in `.env` are also recognised; Windows storage paths are not copied into the container. Credentials stay in ignored local files and are injected at runtime. A valid model endpoint/key, repository access and permitted network access remain prerequisites.
 
-Another workbook can be supplied with `.\Setup-Map.ps1 -Source "C:\data\export.xlsx" -Sheet "Sheet1"`. Git LFS must be installed and able to access the repository. The initial runtime download is approximately 2 GB; later pulls reuse unchanged files. Do not use GitHub's **Download ZIP** as a substitute for the Git LFS checkout.
+The first build/download needs several GB of disk space and can take time. Repeated launches reuse Docker layers, downloaded files and successful offline model checks. Model, extraction, eligibility and historical clustering behavior are unchanged.
 
-Before starting a new analysis:
+| Command | Purpose |
+|---|---|
+| `.\Run-Map.ps1` | Prepare, start and run all eligible records. |
+| `.\Run-Map.ps1 -Limit 5` | The same complete flow with a small live pilot. |
+| `.\Run-Map.ps1 -PrepareOnly` | Build, import and test models without starting the backend or making paid calls. |
+| `.\Run-Map.ps1 -ServeOnly` | Prepare and start the backend without submitting another analysis. |
+| `.\Run-Map.ps1 -NewRun` | Explicitly start another analysis after the previous request finishes. |
+| `.\Run-Map.ps1 -Stop` | Stop this managed container; refuse while an analysis is active. |
+| `.\Run-Map.ps1 -Source "C:\data\export.xlsx" -Sheet "Sheet1"` | Use another source export; repeat the same source options on subsequent launches. |
+| `.\Run-Map.ps1 -NonInteractive` | Require configured credentials rather than prompting. |
 
-1. Edit `.env` with your model endpoint and `OPENAI_API_KEY`. Import fills the source paths. Leave `MAP_DASHBOARD_RUN_ID` blank on a new installation until a completed run exists.
-2. Run `.\Start-Map.ps1`, then create a small analysis through the API as shown below.
+Visit http://127.0.0.1:8101/docs after startup. The backend remains running after the pipeline completes or the terminal closes. Source snapshots, analyses and annotations persist under the repository's `data` directory, mounted at `/data`. Restarting/replacing a container preserves that directory. The API serves the latest completed historical analysis to the frontend.
 
-No separate model-file handover or Hugging Face download is needed. The default configuration loads the bundled BGE revision offline. [Runtime asset details](docs/RUNTIME_ASSETS.md) describe the included files and verification command; [third-party notices](THIRD_PARTY_NOTICES.md) retain model attribution.
+**Rerun the same command to recover.** It monitors the same active request or returns its completed result without repeating paid work. Failed/cancelled jobs retain their logs; after fixing the cause, use `-NewRun` to explicitly retry. This recovers the request, not a partially completed extraction stage after a worker crash. `limit: 0` means all records that pass the existing eligibility rules, not every source row.
 
-**API keys, generated snapshots, saved analyses and reviewer notes are not included.** Setup creates the source snapshot locally. Complete an analysis before expecting the dashboard to show results; the existing local 40-record analysis is not shared through Git.
+An unrelated container is never replaced automatically. When a previous launcher already owns `capa-ai-map` or port 8101, use `-ContainerName capa-ai-map-demo -Port 18101` and update the frontend target. An alternate container name uses its own `.local/<container-name>/data` storage by default. Use `-DataDirectory` to choose another directory and `-EnvFile` for another local configuration. Independent MAP containers must use separate writable data directories. Keep the same options when resuming or stopping that installation. Logs are under `.local/<container-name>/setup.log`, `docker logs <container-name>`, and `data/map-runs/<run-id>/worker.log`.
 
-### First setup with Docker
-
-Docker does not require host Python. Follow [DOCKER.md](DOCKER.md) to pull the same bundled assets with Git LFS, import the source in the container, and create `.env.docker` from [docker.env.example](docker.env.example). Container paths use `/data/...`; Windows `.env` paths cannot be copied unchanged.
-
-After preparation, `Start-Docker.ps1` builds a missing image and starts MAP. Rebuild after code changes with:
-
-```powershell
-.\Start-Docker.ps1 -Build
-```
-
-The launcher mounts host `data` at `/data`; saved output survives container removal. Use `-Port 18101` if 8101 is occupied and point the frontend to that host port.
+`Setup-Map.ps1` and `Start-Map.ps1` have been removed: their roles are now covered by `Run-Map.ps1`. `Start-Docker.ps1` remains an advanced foreground launcher for an already prepared image/configuration, and `Run-Pipeline.ps1` remains useful for a separately deployed backend. A fresh installation needs only the main command above.
 
 ### Connect the frontend
 
@@ -137,7 +125,7 @@ Open http://127.0.0.1:8100/map. The frontend defaults to MAP on port 8101, inclu
 
 ## Configuration
 
-Native Python reads `.env`; Docker reads `.env.docker`. Both are ignored local files. Templates contain configuration names, not credentials.
+The Docker setup reads `.env.docker` and generates an ignored container runtime file under `.local`. Templates contain configuration names, not credentials.
 
 | Setting | Purpose |
 |---|---|
@@ -155,9 +143,9 @@ Viewing a saved result requires no new model call. Extraction and live summary g
 
 Open `/docs` for schemas and **Try it out**. The machine-readable schema is `/openapi.json`.
 
-### Run the pipeline with one command
+### Run the pipeline against an already running backend
 
-After setup, configure the API key and start the backend with `Start-Map.ps1` or `Start-Docker.ps1`. In another PowerShell terminal, run:
+For an already deployed backend, use this optional remote runner. The main `Run-Map.ps1` command already starts and monitors a pipeline; do not run both for the same new analysis. In another PowerShell terminal:
 
 ```powershell
 .\Run-Pipeline.ps1
@@ -239,7 +227,7 @@ The dataset's `sourceSections` contains explicit `{key, label, text}` entries. C
 
 ## Data and saved work
 
-The reference workstation has **19,643 accepted source records**; its pinned dashboard shows **40 analysed records in 18 clusters**. These are local coverage figures, not application limits or saved results supplied by a clone. See [source provenance](data/sources/README.md).
+The reference workstation has **19,643 accepted source records**; its latest dashboard analysis contains **1,000 records in 64 clusters**. These are local coverage figures, not application limits or saved results supplied by a clone. See [source provenance](data/sources/README.md).
 
 | Location | Contents | In Git? |
 |---|---|---|
@@ -261,15 +249,14 @@ src/map_core/             Retained extraction, embedding and clustering logic
 src/map_pipeline.py       Pipeline stage orchestration
 src/run_map.py            Persisted-model compatibility/parity helpers
 tests/                    Offline contracts and runtime checks
-Start-Map.ps1             Native launcher
+Run-Map.ps1               Docker setup, startup and pipeline entry point
 Start-Docker.ps1          Independent Docker launcher
 ```
 
 ## Verify your setup
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m pip check
+docker exec capa-ai-map python -m pip check
 Invoke-RestMethod "http://127.0.0.1:8101/api/v1/map/ready"
 ```
 
@@ -281,31 +268,18 @@ For Docker, use `docker logs capa-ai-map` and the checks in [DOCKER.md](DOCKER.m
 
 | Symptom | Check |
 |---|---|
-| No matching distribution for `soupsieve==4.1` | The virtual environment needs 64-bit Python 3.11.5 or newer within 3.11; follow the environment repair steps below |
+| No matching distribution for `soupsieve==4.1` | Use `Run-Map.ps1`; its Docker image supplies compatible Python without using the host virtual environment |
 | Source unavailable / HTTP 503 | Import the CSV; verify both source paths in the host/container environment |
 | No dataset / completed analysis | Finish a run; check `MAP_DASHBOARD_RUN_ID` references an available completed run or is blank |
-| Offline model cannot load | Run `git lfs pull`, then `.venv\Scripts\python.exe -m capa_map.bootstrap`; verify `HF_HOME` and `MAP_ASSETS_DIR` point to this checkout's data |
+| Offline model cannot load | Run `Run-Map.ps1 -PrepareOnly`; review checksum/model errors and the Docker data mount |
 | Model endpoint error | Set an actual endpoint, model and key; blank `OPENAI_BASE_URL` is not a working MAP configuration |
 | Frontend cannot reach MAP | Check port 8101 and the frontend's `MAP_API_TARGET` |
 | CSV is an LFS pointer | Run `git lfs pull` before import |
-| Port occupied | Stop the other instance or use `Start-Docker.ps1 -Port 18101` and update the frontend target |
+| Port occupied | Use `Run-Map.ps1 -ContainerName capa-ai-map-demo -Port 18101` and update the frontend target |
 
-### Repair an environment created with an older Python 3.11
+### Older host Python errors
 
-Install a supported 64-bit Python 3.11 build first. Python 3.11.9 is the native version verified for this project and has a [Windows installer](https://www.python.org/downloads/release/python-3119/). The dependency minimum is 3.11.5; upgrading pip alone cannot make an older interpreter satisfy it.
-
-Open a new PowerShell terminal in the backend folder. The first check below stops if the Python launcher still selects an unsupported interpreter. The existing virtual environment is then renamed as a backup before setup creates its replacement. Source files, `.env`, saved analyses and reviewer notes stay in place.
-
-```powershell
-py -3.11 .\src\capa_map\bootstrap.py --check-python
-if ($LASTEXITCODE -ne 0) { throw 'Install a supported 64-bit Python 3.11 build before continuing.' }
-if (Test-Path -LiteralPath .venv) {
-    Rename-Item -LiteralPath .venv -NewName ('.venv-old-' + (Get-Date -Format yyyyMMddHHmmss))
-}
-.\Setup-Map.ps1
-```
-
-These backup folders are ignored by Git. Keep the backup until the replacement environment starts successfully.
+Use `Run-Map.ps1`: Python and pinned dependencies are installed inside the Docker image. An old host `.venv` is not used and does not need to be repaired. Docker Desktop must be running with Linux containers.
 
 ## Deployment
 

@@ -147,7 +147,17 @@ def start(limit: int, pr_ids: list[str], source_mode: str = 'historical', **opti
     if options.get('include_dr_types') and options.get('exclude_dr_types'):
         raise ValueError('Choose either included or excluded DR types.')
     with FileLock(str(root() / '.launch.lock'), timeout=10):
-        if any(item['status'] in {'queued', 'running'} for item in history(100000)):
+        previous = history(100000)
+        request_key = options.get('client_request_id')
+        if request_key:
+            submitted = {'limit': limit, 'pr_ids': pr_ids, 'source_mode': source_mode, **options}
+            for item in previous:
+                if item.get('client_request_id') == request_key:
+                    saved = read_json(folder(item['run_id']) / 'request.json')
+                    if any(saved.get(key) != value for key, value in submitted.items()):
+                        raise ValueError('client_request_id was already used with different analysis options.')
+                    return item
+        if any(item['status'] in {'queued', 'running'} for item in previous):
             raise RunBusyError('A MAP analysis is already running. Wait for it to finish.')
         run_id = uuid4().hex
         directory = root() / run_id

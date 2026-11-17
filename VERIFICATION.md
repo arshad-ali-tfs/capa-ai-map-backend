@@ -1,5 +1,16 @@
 # Local MAP verification - 16 November 2026
 
+## One-command Docker setup - 17 November 2026
+
+- `Run-Map.ps1` now orchestrates source/model retrieval, image build, source import, real offline model checks, detached API startup and the eligible-record pipeline. All Python execution is inside Docker; no host Python or `.venv` is used by the entry command. The old native setup/start scripts were removed.
+- Rebuilt the dependency layer on Linux/amd64 with Python 3.11.18 and the pinned CPU Torch/dependency lock. Installation and `pip check` passed. The service runs as UID 10001.
+- Tested preparation beginning with an empty isolated data directory: all 21 runtime files passed SHA-256 verification; all 19,643 source records imported with zero quarantined rows. An initial preparation was deliberately stopped while applying a source CSV preparation fix, then resumed. The unchanged BGE/spaCy/UMAP/FAISS model path passed inside Docker.
+- A live two-record historical pilot completed Sol extraction, 1,024-dimensional embeddings, historical cluster assignment, live summaries and exports. Every structural validation passed. This is an execution test, not a clustering-accuracy evaluation or a full-source live run.
+- Repeating the entry command reused the exact completed run ID and retained one job in history. Stopping and starting the container preserved both records and the final draft checksum; no duplicate paid analysis was submitted. The restart also exercised container replacement after an image rebuild.
+- The final offline suite passed **112 tests**, including Docker CLI failure boundaries, paths with spaces, idempotent submissions, recovery after a lost response, changed-asset rejection, source accounting and exact CSV byte preservation. Evidence is stored locally under `.local/capa-ai-map-bootstrap-qa/` and excluded from Git.
+- Tests used a separate image/container/data directory and port 28101. The existing demo frontend on 8100 and MAP backend on 8101 continued to serve the original 40 analysed records and 18 clusters; MATCH and AUTHOR were left running.
+- First source import/model checks can take several minutes on Docker Desktop Windows bind mounts. Subsequent launches reuse imports and successful model checks. Docker Desktop, repository/network access and working model credentials remain prerequisites. Databricks deployment was not performed.
+
 ## Docker packaging verification - 16 November 2026
 
 - Built and ran `capa-ai-map:local` on Docker Desktop 4.99.0, Linux/amd64, Python 3.11.18, as UID/GID 10001. The existing dependency lock passed `pip check`. CPU-only Torch uses the existing version; model, prompt and workflow code were not changed.
@@ -24,3 +35,25 @@ The operational dashboard retains the same 40 records and 18 clusters from the 1
 Chart shortTitle values are now deterministic excerpts of historical titles. Full titles, subtitles, historical context, scores and assignments remain unchanged. A targeted contract test checks that shortening display text preserves source facts, identifiers, dates and quantities.
 
 All model, extraction prompt, three-field input, BGE, UMAP and FAISS code remains unchanged. Reports, fictional verification runs and generated runtime files are ignored. A Databricks deployment has not been performed for this update. Persist CAPA_DATA_DIR, including annotation history, and complete the environment-specific deployment checks in DEPLOYMENT.md before cloud use.
+
+## 1,000-record execution and saved-run selection — 17 November 2026
+
+Completed a real historical run with 1,000 unique eligible records from the 19,643-record snapshot. Sol at medium reasoning used the original three narratives; 68 records required translation. BGE produced a finite 1,000 × 1,024 matrix, and the existing persisted UMAP/FAISS path assigned the records across 64 historical clusters. Live batch summaries completed for every cluster. All six structural validation checks passed, and all outputs remain pending review. This verifies execution and record coverage; it does not measure clustering accuracy.
+
+The new run is the default displayed analysis. Four previous completed results remain available through the frontend selector, including the previous 40-record historical analysis. Actual frontend validation confirmed identical backend/proxy data and all 1,000 original IDs and source sections. Every previous dataset also passed the frontend contract. The history endpoint now accepts a bounded `limit` query so earlier results beyond the default 30 can be selected. Six targeted history/dashboard tests passed. The common frontend separately passed its controlled browser suite and live desktop/phone run-switching checks.
+
+## Close-match review trigger removed - 17 November 2026
+
+Close scores no longer create record warnings, Needs review badges or related UI counts, including when displaying existing runs with old flags. Future clustering keeps the legacy review flag False and its former threshold blank, preserving the raw top-two margin, scores and assignments. No LLM explanation stage was added. Missing historical cluster descriptions have a specific catalogue warning identifying the cluster and record; unassigned records keep their warning.
+
+All 118 offline backend tests passed. A controlled clustering test covers tied, close and distinct scores, verifies the flag stays disabled, and checks identical assignments, merge behavior and scores. HTTP tests cover old flags, overlapping missing descriptions, and unassigned records. Existing offline worker checks confirm no additional model calls.
+
+The Docker image was rebuilt and MAP restarted without starting a pipeline. The current result still contains 1,000 records and 64 clusters. Warnings fell from 117 to 58: 59 close-only warnings were removed; two other close records retain a missing-description warning. The remaining warnings identify catalogue gaps. All 82 inventoried saved-run files retain their checksums; record IDs, assignments, scores, exact sources and saved annotations match the earlier dataset. All five completed analyses remain available. The frontend proxy returns the same dataset as MAP. Evidence is saved locally in `.local/warning-policy-proof.json`. No paid model calls were made and nothing was pushed to GitHub.
+
+## Saved 5W1H in record review - 17 November 2026
+
+The dataset API now includes a typed `fiveWh` object with the six saved extraction strings. It reads the selected run's existing output, preserving wording, whitespace, identifiers, dates and quantities. It does not use source metadata to fill missing extracted values, change the prompts or invoke the model. Categories absent from older files return empty strings.
+
+All 122 offline backend tests passed. Added HTTP and saved-CSV integration checks cover exact six-field pass-through, missing categories, preserved sources/assignments and the absence of model client creation during reads. The API documentation and response schema include the new field.
+
+The Docker MAP service was rebuilt and restarted without launching a pipeline. Every one of the 6,000 extracted category values in the current 1,000-record analysis and 240 values in the older 40-record analysis matches its saved CSV exactly. All 82 inventoried saved-run files retain their checksums. Current record identity, assignments, scores, exact sources, annotations and 58 remaining catalogue warnings are unchanged; all five saved analyses remain available. See the ignored `.local/fivewh-proof.json`. The frontend separately passed its production build, all 90 controlled browser checks and four live desktop/phone scenarios covering both analyses. No paid model call or GitHub push was made.

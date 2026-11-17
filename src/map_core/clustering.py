@@ -34,9 +34,10 @@ def cluster_embedded(df: pd.DataFrame, inputs: Path, *, transform_mode: str = 'a
     frame['cluster_similarity']=scores[:,0]
     frame['cluster_top2_margin']=scores[:,0]-scores[:,1]
     frame['second_cluster_id'] = cluster_ids[:,1].astype(int)
-    # Development review heuristic, not a calibrated accuracy/confidence measure.
-    frame['close_assignment_review'] = frame['cluster_top2_margin'] <= 1e-4
-    frame['assignment_review_margin_threshold'] = 1e-4
+    # Keep legacy columns compatible with exports, but score proximity is not a
+    # review trigger. Preserve the scores/margin and the selected cluster.
+    frame['close_assignment_review'] = False
+    frame['assignment_review_margin_threshold'] = np.nan
     frame['inference_path']=np.where(training_ids>=0,'fitted_training',
         np.where(ambiguous,'ambiguous_transform','umap_transform'))
     frame['inference_ambiguous']=ambiguous
@@ -46,8 +47,9 @@ def cluster_embedded(df: pd.DataFrame, inputs: Path, *, transform_mode: str = 'a
         'fitted_training_records':int((training_ids>=0).sum()),
         'new_records_transformed':int(((training_ids<0)&(~ambiguous)).sum()),
         'ambiguous_training_vectors':int(ambiguous.sum()),
-        'close_assignments_for_review': int(frame['close_assignment_review'].sum()),
-        'review_margin_threshold': 1e-4,
+        'close_assignments_for_review': 0,
+        'close_assignment_review_enabled': False,
+        'review_margin_threshold': None,
         'input_normalized_before_umap':bool(normalize_input),
         'note':'No retraining performed. Saved UMAP and FAISS state reused.'
     }

@@ -210,11 +210,13 @@ List the most recent analyses.
 
 **Body:** none.
 
-**Returns (200):** items: up to 30 run statuses, newest first.
+**Query:** `limit` (1–100,000; default 30) controls how many saved runs are returned.
 
-**Behavior and saved changes:** No HTTP pagination argument. Status reconciliation can mark an orphaned worker failed.
+**Returns (200):** items: up to `limit` run statuses, newest first.
 
-**Errors:** No route-specific error mapping.
+**Behavior and saved changes:** The frontend requests the full supported history for its analysis selector and displays completed runs. Status reconciliation can mark an orphaned worker failed.
+
+**Errors:** 422 for an out-of-range limit.
 
 <a id="post-api-v1-map-runs"></a>
 
@@ -226,7 +228,7 @@ Queue a new extraction and clustering analysis.
 
 **Returns (202):** 202 with a run_id, request and initial status; poll the status route.
 
-**Behavior and saved changes:** Creates a run folder and starts a background worker. Uses the configured model API; summary_mode pending/reference does not disable extraction calls. Only one queued/running run per instance.
+**Behavior and saved changes:** Creates a run folder and starts a background worker. Uses the configured model API; summary_mode pending/reference does not disable extraction calls. Only one queued/running run per instance. An optional `client_request_id` makes a retried submission return its existing run, including while that run is active. Reusing the key with different options returns 422. Omit it for ordinary independent requests.
 
 **Errors:** 409 when a run is already active; 422 for invalid options. Later execution failures appear in run status/logs.
 
@@ -457,6 +459,7 @@ Required/default columns describe omission, not automatic approval or workflow r
 
 | Field | Type | Required / default | Constraints |
 |---|---|---|---|
+| `client_request_id` | string or null | `null` / omitted | Exactly 32 lowercase hexadecimal characters; optional idempotency key. |
 | `limit` | integer | `5` | min 0; max 100000 |
 | `source_mode` | string | `"historical"` | one of `"historical"`, `"synthetic"` |
 | `pr_ids` | array of string | `[]` | max items 100000 |
@@ -477,6 +480,7 @@ The complete `RunRequest` field table above gives defaults and limits. These are
 
 | Field | Function |
 |---|---|
+| `client_request_id` | Optional stable submission key. A network retry with this key reuses the same run instead of starting a duplicate paid analysis. |
 | `limit` | Maximum selected records; `0` means all eligible records, subject to the service limit. Default `5`. |
 | `source_mode` | `historical` uses the imported source; `synthetic` uses the explicit synthetic fixture. Synthetic mode still uses model extraction. |
 | `pr_ids` | Restrict selection to specified source IDs; an empty list imposes no ID restriction. Eligibility rules still apply. |
@@ -552,7 +556,9 @@ On 409, reload current state before deciding whether to resubmit. Record annotat
 
 ## Frontend response contract
 
-`MapDataset` contains `clusters`, `records`, `months`, `refreshedAt` and `analysis`. `analysis` identifies the run, analysed/source counts, snapshot and selection method. Each record includes source metadata, `clusterId`, `similarity`, warnings, annotation and `sourceSections` entries shaped as `{key, label, text}`. Display these sections separately to preserve source field boundaries. Cluster CAPA relationships come from source links. The full nested schema is available in Swagger under **Schemas** and in [the response models](../src/capa_map/schemas.py).
+`MapDataset` contains `clusters`, `records`, `months`, `refreshedAt` and `analysis`. `analysis` identifies the run, analysed/source counts, snapshot and selection method. Each record includes source metadata, `clusterId`, `similarity`, warnings, annotation and `sourceSections` entries shaped as `{key, label, text}`. Display these sections separately to preserve source field boundaries. The `fiveWh` object contains the saved extraction strings `who`, `what`, `when`, `where`, `why` and `how` for that same record and run. Empty categories are returned as empty strings; saved unavailable markers remain intact. These are AI extractions to compare with the source, not new source fields. Dataset reads do not generate or modify them and do not call the model. Cluster CAPA relationships come from source links. The full nested schema is available in Swagger under **Schemas** and in [the response models](../src/capa_map/schemas.py).
+
+Close scores between the first and second cluster do not trigger `Needs review`. This applies to saved-run presentation and future pipelines. Future exports keep the legacy `close_assignment_review` column as `False` and leave its former threshold blank; raw similarity, score gap and assignments are preserved. Old run files are not rewritten, so their diagnostic close flags may still appear in raw downloads/results. Missing historical cluster descriptions and unassigned records retain specific warnings. No additional LLM explanation calls are made.
 
 Similarity is a numerical matching signal, not a measured probability of correctness. Neither saving an annotation nor approving a summary changes the original source or establishes an assignment's accuracy.
 

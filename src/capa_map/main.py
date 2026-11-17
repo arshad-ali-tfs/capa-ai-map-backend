@@ -3,7 +3,7 @@ from io import StringIO
 import mimetypes
 import os
 from typing import Literal
-from fastapi import HTTPException
+from fastapi import HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
 from capa_map.infrastructure.web import create_service
@@ -15,6 +15,7 @@ app = create_service('map')
 
 
 class RunRequest(BaseModel):
+    client_request_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
     limit: int = Field(default=5, ge=0, le=100000)
     source_mode: Literal['historical', 'synthetic'] = 'historical'
     pr_ids: list[str] = Field(default_factory=list, max_length=100000)
@@ -127,8 +128,9 @@ def start_run(request: RunRequest):
 
 
 @app.get('/api/v1/map/runs')
-def run_history():
-    return {'items': runs.history()}
+def run_history(limit: int = Query(default=30, ge=1, le=100000)):
+    """Saved analyses, newest first; raise the limit to select older runs."""
+    return {'items': runs.history(limit)}
 
 
 @app.get('/api/v1/map/runs/{run_id}')

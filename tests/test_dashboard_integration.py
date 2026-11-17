@@ -50,7 +50,7 @@ def test_exact_source_dates_relationships_and_unassigned_accounting(analysis,tmp
     assert data['analysis']['sourceRecordCount']==5 and data['analysis']['sourceAvailable']
     first,unassigned=data['records']
     assert first['opened']=='2025-05-12' and first['createdLabel']=='2025-05-10'
-    assert first['daysOpen']==3 and first['similarity']==.91 and first['warnings']
+    assert first['daysOpen']==3 and first['similarity']==.91 and first['warnings']==[]
     assert unassigned['clusterId']=='' and unassigned['similarity'] is None and unassigned['warnings']
     assert first['sourceNarrative'].endswith('20 mL on 12-May-2025.')
     assert {c['id'] for c in data['clusters'][0]['capas']}=={'CAPA-1','CAPA-2'}
@@ -116,3 +116,22 @@ def test_annotations_refuse_incomplete_runs_and_unsafe_ids(analysis):
     with pytest.raises(runs.RunBusyError):annotations.save(run_id,'001','','',0)
     with TestClient(app) as client:
         assert client.get('/api/v1/map/runs/not-a-run/annotations').status_code==404
+
+
+def test_fivewh_flows_from_saved_csv_through_results_to_frontend_contract(analysis):
+    run_id, directory = analysis
+    draft = directory / runs.ARTIFACTS['draft'][0]
+    saved = runs.rows(draft)
+    facts = dict(zip(runs.FIVEWH, ['Operator', 'TEST-42: 20 mL spill', '12-May-2025', 'EQ-104', 'not_available', 'During transfer']))
+    saved[0].update(facts)
+    with draft.open('w', newline='', encoding='utf8') as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(saved[0]))
+        writer.writeheader()
+        writer.writerows(saved)
+    before = draft.read_bytes()
+    with TestClient(app) as client:
+        result = client.get(f'/api/v1/map/runs/{run_id}/results').json()
+        dataset = client.get(f'/api/v1/map/runs/{run_id}/dataset').json()
+    assert dataset['records'][0]['fiveWh'] == result['records'][0]['fields'] == facts
+    assert dataset['records'][1]['fiveWh'] == dict.fromkeys(runs.FIVEWH, '')
+    assert draft.read_bytes() == before

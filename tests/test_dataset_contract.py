@@ -28,7 +28,7 @@ def test_dataset_preserves_identity_source_and_does_not_fabricate_missing_values
     assert result['clusters'][0]['match']==91
     assert 'capa' not in result['clusters'][0]
     assert set(result)=={'clusters','records','months','refreshedAt','analysis'}
-    assert row['similarity']==.91 and row['warnings']
+    assert row['similarity']==.91 and row['warnings']==[]
     assert result['analysis']['recordCount']==1
 
 
@@ -134,3 +134,36 @@ def test_map_source_api_stays_within_map(tmp_path,monkeypatch):
         assert client.get('/api/v1/map/records?limit=0').status_code==422
         assert client.get('/api/v1/map/source').json()['accepted_rows']==1
     with pytest.raises(ValueError):create_service('match')
+
+
+def test_saved_fivewh_values_are_exposed_exactly_without_model_calls(payload, monkeypatch):
+    monkeypatch.setenv('MAP_DASHBOARD_RUN_ID', 'b'*32)
+    facts = {
+        'who': '  Operator TEST-42; team A.\r\nSecond line.  ',
+        'what': 'Lot AB-123: 20 mL at 12:45 on 12-May-2025. <literal text>',
+        'when': '12-May-2025 at 12:45', 'where': 'Room EQ-104',
+        'why': 'not_available', 'how': 'Résultat: 未確認; 0.25 mg.',
+    }
+    payload['records'][0]['fields'] = facts.copy()
+    with patch.object(runs, 'results', return_value=payload), \
+         patch('map_core.llm.LiveLLM', side_effect=AssertionError('A read must not create a model client')), TestClient(app) as client:
+        for route in ['/map/dataset', '/api/v1/map/runs/' + 'b'*32 + '/dataset']:
+            response = client.get(route)
+            assert response.status_code == 200
+            row = response.json()['records'][0]
+            assert row['fiveWh'] == facts
+            assert row['sourceSections'][0]['text'] == payload['records'][0]['source']['detailed_description']
+            assert row['similarity'] == .91 and row['clusterId'] == '7'
+    assert payload['records'][0]['fields'] == facts
+
+
+@pytest.mark.parametrize('facts', [{}, {'what': 'Saved event', 'when': None}])
+def test_missing_saved_fivewh_categories_remain_explicitly_empty(payload, facts):
+    payload['records'][0]['fields'] = facts
+    with patch.object(runs, 'results', return_value=payload), TestClient(app) as client:
+        response = client.get('/api/v1/map/runs/' + 'b'*32 + '/dataset')
+    assert response.status_code == 200
+    row = response.json()['records'][0]
+    assert row['fiveWh'] == {key: facts.get(key) or '' for key in runs.FIVEWH}
+    # The source event/metadata must not be used to fill missing extracted values.
+    assert row['fiveWh']['who'] == '' and row['fiveWh']['where'] == ''

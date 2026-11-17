@@ -37,15 +37,22 @@ def initialize_bundled_source(root: Path) -> dict:
     return {'source': 'bundled source imported'}
 
 
-def verify_bundle(root: Path) -> dict:
+def verify_bundle(root: Path, *, data_root: Path | None = None) -> dict:
     root = root.resolve()
     manifest = json.loads((root / 'runtime-assets.json').read_text(encoding='utf-8'))
     errors = []
     total = 0
     for entry in manifest['files']:
         relative = PurePosixPath(entry['path'])
-        target = (root / relative).resolve()
-        if relative.is_absolute() or not target.is_relative_to(root):
+        if data_root is not None:
+            if not relative.parts or relative.parts[0] != 'data':
+                raise ValueError('Runtime manifest paths must stay inside the repository data directory.')
+            base = data_root.resolve()
+            target = (base / relative.relative_to('data')).resolve()
+        else:
+            base = root
+            target = (base / relative).resolve()
+        if relative.is_absolute() or not target.is_relative_to(base):
             raise ValueError('Runtime manifest paths must stay inside the repository.')
         if not target.is_file():
             errors.append(f"Missing: {entry['path']}")

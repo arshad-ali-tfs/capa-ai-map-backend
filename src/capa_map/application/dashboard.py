@@ -107,10 +107,8 @@ def dataset(run_id):
         source = row.get('source', {})
         cluster_id = str(row['finalCluster']) if row.get('finalCluster') is not None else ''
         warnings = []
-        if row.get('close'):
-            warnings.append('Close assignment: the leading clusters have similar scores.')
         if row.get('missing'):
-            warnings.append('Historical cluster label unavailable.')
+            warnings.append(f'Cluster {cluster_id or "unavailable"} has no historical name or description in the cluster catalogue. The cluster description needs to be completed; this does not indicate that record {row["id"]} is incorrectly assigned.')
         if not cluster_id or cluster_id not in known_clusters:
             warnings.append('No cluster assignment is available. Review this record separately.')
         signals = []
@@ -135,6 +133,9 @@ def dataset(run_id):
                 {'key': key, 'label': SOURCE_LABELS.get(key, key.replace('_', ' ').capitalize()), 'text': str(value)}
                 for key, value in source.items() if value
             ],
+            # Read the six saved outputs for this record/run; never re-extract
+            # or substitute source metadata when a category is unavailable.
+            'fiveWh': {key: row.get('fields', {}).get(key) or '' for key in runs.FIVEWH},
             'matchSignals': signals, 'similarity': row.get('similarity'), 'warnings': warnings,
             'annotation': saved.get(row['id'], annotations.empty()), 'volume': 1,
             'daysOpen': (closed-opened).days if opened and closed and closed >= opened else None,
