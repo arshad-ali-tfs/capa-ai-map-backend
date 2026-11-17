@@ -1,4 +1,4 @@
-# Verified local Windows/Python 3.11 MAP environment.
+# Verified local Windows/Python 3.11.9 MAP environment; minimum Python 3.11.5, 64-bit.
 annotated-doc==0.0.6
 annotated-types==0.8.0
 anyascii==0.3.3

@@ -3,7 +3,19 @@ import json
 
 import pytest
 
-from capa_map.bootstrap import initialize_bundled_source, verify_bundle
+from capa_map.bootstrap import initialize_bundled_source, verify_bundle, verify_python
+
+
+@pytest.mark.parametrize('version', [(3, 11, 5), (3, 11, 9), (3, 11, 18)])
+def test_supported_python_patch_versions(version):
+    assert verify_python(version, 64)['python'] == '.'.join(map(str, version))
+
+
+@pytest.mark.parametrize('version,bits', [((3, 11, 0), 64), ((3, 11, 4), 64), ((3, 10, 16), 64),
+                                          ((3, 12, 0), 64), ((3, 11, 9), 32)])
+def test_old_python_patches_other_minors_and_32_bit_are_rejected(version, bits):
+    with pytest.raises(ValueError, match='recreate .venv'):
+        verify_python(version, bits)
 
 
 def bundle(root, content=b'fictional model bytes'):

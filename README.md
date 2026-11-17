@@ -8,7 +8,7 @@ A deviation is a recorded departure from an expected process. CAPA means correct
 
 | At a glance | Details |
 |---|---|
-| Runtime | Python 3.11, 64-bit; FastAPI |
+| Runtime | Python 3.11.5 or newer within 3.11, 64-bit; FastAPI |
 | Local API | http://127.0.0.1:8101 |
 | Interactive API docs | http://127.0.0.1:8101/docs |
 | Docker image | `capa-ai-map:local` |
@@ -85,7 +85,7 @@ Keep the terminal open. Visit [API docs](http://127.0.0.1:8101/docs); stop with 
 
 ### First setup on a new machine: native Python
 
-Install Git, Git LFS and **Python 3.11, 64-bit**, then:
+Install Git, Git LFS and **64-bit Python 3.11.5 or newer within the 3.11 series**, then:
 
 ```powershell
 git lfs install
@@ -97,6 +97,8 @@ cd capa-ai-map-backend
 Skip the clone steps if you already have the repository. **Setup pulls the source, BGE checkpoint/tokenizer and saved UMAP/FAISS bundle from this repository through Git LFS.** It verifies file sizes and SHA-256 checksums, creates `.venv`, installs pinned dependencies including the spaCy English model, creates `.env` if absent, and imports the bundled source on first setup. An existing source configuration and pinned dashboard run are preserved when setup is repeated without `-Source`.
 
 On Windows, clone into a short location such as `C:\dev\capa-ai-map-backend`. The model cache has nested directories; on machines without Windows long-path support, a deeply nested checkout can exceed the path limit even when Git's long-path setting is enabled.
+
+Setup checks the interpreter's patch version and architecture before downloading the runtime bundle. The dependency lock requires at least Python 3.11.5 because of `soupsieve==4.1`; Python 3.11.0 through 3.11.4 are not supported. Native execution here was verified on Python 3.11.9. Installing a newer Python does not reliably update an existing virtual environment; recreate that environment as described under [Troubleshooting](#troubleshooting).
 
 Another workbook can be supplied with `.\Setup-Map.ps1 -Source "C:\data\export.xlsx" -Sheet "Sheet1"`. Git LFS must be installed and able to access the repository. The initial runtime download is approximately 2 GB; later pulls reuse unchanged files. Do not use GitHub's **Download ZIP** as a substitute for the Git LFS checkout.
 
@@ -279,6 +281,7 @@ For Docker, use `docker logs capa-ai-map` and the checks in [DOCKER.md](DOCKER.m
 
 | Symptom | Check |
 |---|---|
+| No matching distribution for `soupsieve==4.1` | The virtual environment needs 64-bit Python 3.11.5 or newer within 3.11; follow the environment repair steps below |
 | Source unavailable / HTTP 503 | Import the CSV; verify both source paths in the host/container environment |
 | No dataset / completed analysis | Finish a run; check `MAP_DASHBOARD_RUN_ID` references an available completed run or is blank |
 | Offline model cannot load | Run `git lfs pull`, then `.venv\Scripts\python.exe -m capa_map.bootstrap`; verify `HF_HOME` and `MAP_ASSETS_DIR` point to this checkout's data |
@@ -286,6 +289,23 @@ For Docker, use `docker logs capa-ai-map` and the checks in [DOCKER.md](DOCKER.m
 | Frontend cannot reach MAP | Check port 8101 and the frontend's `MAP_API_TARGET` |
 | CSV is an LFS pointer | Run `git lfs pull` before import |
 | Port occupied | Stop the other instance or use `Start-Docker.ps1 -Port 18101` and update the frontend target |
+
+### Repair an environment created with an older Python 3.11
+
+Install a supported 64-bit Python 3.11 build first. Python 3.11.9 is the native version verified for this project and has a [Windows installer](https://www.python.org/downloads/release/python-3119/). The dependency minimum is 3.11.5; upgrading pip alone cannot make an older interpreter satisfy it.
+
+Open a new PowerShell terminal in the backend folder. The first check below stops if the Python launcher still selects an unsupported interpreter. The existing virtual environment is then renamed as a backup before setup creates its replacement. Source files, `.env`, saved analyses and reviewer notes stay in place.
+
+```powershell
+py -3.11 .\src\capa_map\bootstrap.py --check-python
+if ($LASTEXITCODE -ne 0) { throw 'Install a supported 64-bit Python 3.11 build before continuing.' }
+if (Test-Path -LiteralPath .venv) {
+    Rename-Item -LiteralPath .venv -NewName ('.venv-old-' + (Get-Date -Format yyyyMMddHHmmss))
+}
+.\Setup-Map.ps1
+```
+
+These backup folders are ignored by Git. Keep the backup until the replacement environment starts successfully.
 
 ## Deployment
 

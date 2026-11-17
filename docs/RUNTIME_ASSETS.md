@@ -16,7 +16,7 @@ The BGE revision is `d4aa6901d3a41ba39fb536a557fa166f842b0e09`. Its Hugging Face
 
 ## First setup
 
-Install Git, Git LFS and Python 3.11 (64-bit), clone the repository and run the following. On Windows, use a short checkout location such as `C:\dev\capa-ai-map-backend`. The README's clone command also enables Git long paths; Git's setting alone does not remove Windows/Python path limits when OS long-path support is disabled.
+Install Git, Git LFS and 64-bit Python 3.11.5 or newer within the 3.11 series, clone the repository and run the following. On Windows, use a short checkout location such as `C:\dev\capa-ai-map-backend`. The README's clone command also enables Git long paths; Git's setting alone does not remove Windows/Python path limits when OS long-path support is disabled.
 
 ```powershell
 .\Setup-Map.ps1

@@ -5,8 +5,22 @@ import argparse
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
+import struct
+import sys
 
 LFS_POINTER = b'version https://git-lfs.github.com/spec/v1'
+
+
+def verify_python(version=None, bits=None) -> dict:
+    version = tuple(sys.version_info[:3]) if version is None else tuple(version)
+    bits = struct.calcsize('P') * 8 if bits is None else bits
+    detected = '.'.join(map(str, version))
+    if not (version[:2] == (3, 11) and version >= (3, 11, 5) and bits == 64):
+        raise ValueError(
+            f'MAP needs 64-bit Python 3.11.5 or newer within the 3.11 series; detected Python {detected} ({bits}-bit). '
+            'The pinned soupsieve 4.1 dependency requires Python >=3.11.5. '
+            'Install a supported Python 3.11 build, then recreate .venv. Upgrading pip alone does not fix the Python version.')
+    return {'python': detected, 'architecture_bits': bits}
 
 
 def initialize_bundled_source(root: Path) -> dict:
@@ -55,10 +69,15 @@ def verify_bundle(root: Path) -> dict:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=Path.cwd(), help='Repository checkout containing runtime-assets.json')
-    parser.add_argument('--initialize-source', action='store_true', help='Import the bundled source only when .env has no source configuration')
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument('--check-python', action='store_true', help='Check interpreter compatibility before downloading files or installing packages')
+    action.add_argument('--initialize-source', action='store_true', help='Import the bundled source only when .env has no source configuration')
     args = parser.parse_args()
     try:
-        result = initialize_bundled_source(args.root) if args.initialize_source else verify_bundle(args.root)
+        if args.check_python:
+            result = verify_python()
+        else:
+            result = initialize_bundled_source(args.root) if args.initialize_source else verify_bundle(args.root)
     except (OSError, ValueError, KeyError) as error:
         parser.exit(1, f'MAP runtime verification failed: {error}\n')
     print(json.dumps(result))
