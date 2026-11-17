@@ -153,6 +153,28 @@ Viewing a saved result requires no new model call. Extraction and live summary g
 
 Open `/docs` for schemas and **Try it out**. The machine-readable schema is `/openapi.json`.
 
+### Run the pipeline with one command
+
+After setup, configure the API key and start the backend with `Start-Map.ps1` or `Start-Docker.ps1`. In another PowerShell terminal, run:
+
+```powershell
+.\Run-Pipeline.ps1
+```
+
+This submits **all eligible source records** (`limit: 0`) using the existing MAP filters, live extraction and live summaries. It monitors progress, prints result/download links when completed and reports failed or cancelled runs. Files are saved by the backend under `CAPA_DATA_DIR/map-runs/<run_id>/`; Docker's standard data mount keeps them in the repository's host `data` folder.
+
+For a smaller test, another backend address or resuming the monitor for an existing run:
+
+```powershell
+.\Run-Pipeline.ps1 -Limit 40
+.\Run-Pipeline.ps1 -ApiUrl http://127.0.0.1:18101
+.\Run-Pipeline.ps1 -RunId "YOUR_RUN_ID"
+```
+
+Stopping the monitor with Ctrl+C leaves the backend job running. Replace `YOUR_RUN_ID` with its printed run ID to resume monitoring rather than submitting another run. If the frontend is pinned to an older `MAP_DASHBOARD_RUN_ID`, update or clear that setting and restart MAP to display the new analysis.
+
+### Submit a run directly through the API
+
 Create a small analysis using normal live summaries:
 
 ```powershell
