@@ -40,10 +40,11 @@ def test_future_clustering_never_flags_tied_or_close_scores(tmp_path):
 
 @pytest.mark.parametrize('close,missing,assigned,expected', [
     (True, False, 7, []), (False, False, 7, []),
-    (True, True, 7, ['Cluster 7 has no historical name or description']),
+    (True, True, 7, []),
     (True, False, None, ['No cluster assignment']),
+    (True, True, None, ['No cluster assignment']),
 ])
-def test_saved_runs_ignore_obsolete_close_flags_but_keep_real_warnings(monkeypatch, close, missing, assigned, expected):
+def test_saved_runs_ignore_close_flags_and_separate_record_and_cluster_warnings(monkeypatch, close, missing, assigned, expected):
     monkeypatch.delenv('CAPA_DATA_DIR', raising=False)
     payload = {'run_id': 'b'*32, 'status': 'completed', 'created_at': '2026-01-01',
                'records': [{'id': 'OLD-001', 'finalCluster': assigned, 'site': 'Fictional', 'type': 'Deviation',
@@ -59,8 +60,11 @@ def test_saved_runs_ignore_obsolete_close_flags_but_keep_real_warnings(monkeypat
     assert len(row['warnings']) == len(expected)
     assert all(fragment in warning for fragment, warning in zip(expected, row['warnings']))
     assert not any('Close assignment' in signal for signal in row['matchSignals'])
+    assert not any('cluster catalogue' in signal for signal in row['matchSignals'])
     assert row['similarity'] == .99
     assert payload['records'][0]['close'] == close  # Do not rewrite old results.
-    if missing:
-        assert 'OLD-001' in row['warnings'][0]
-        assert 'does not indicate' in row['warnings'][0]
+    cluster_warnings = response.json()['clusters'][0]['warnings']
+    assert len(cluster_warnings) == int(missing and assigned == 7)
+    if cluster_warnings:
+        assert 'Cluster 7 has no historical name or description' in cluster_warnings[0]
+        assert 'OLD-001' not in cluster_warnings[0]

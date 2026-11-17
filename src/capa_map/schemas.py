@@ -92,6 +92,7 @@ class Cluster(Contract):
     titleSource: Literal['current_analysis', 'historical', 'unavailable']
     analysisContext: AnalysisClusterContext | None
     historicalContext: HistoricalClusterContext | None
+    warnings: list[str]
     capas: list[CapaRelationship]
 
 

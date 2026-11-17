@@ -95,8 +95,42 @@ def test_saved_csv_context_reaches_http_contract_without_rewriting_run_files(tmp
     assert cluster['contextSource'] == cluster['titleSource'] == 'current_analysis'
     assert cluster['analysisContext']['runId'] == RUN and cluster['analysisContext']['recordCount'] == 1
     assert cluster['context'] == row['proposed_detailed_cluster_summary']
-    assert data['records'][0]['warnings']  # Missing catalogue metadata is still disclosed.
+    assert data['records'][0]['warnings'] == []
+    assert len(cluster['warnings']) == 1  # Catalogue metadata is disclosed once per cluster.
+    assert 'Cluster 7 has no historical name or description' in cluster['warnings'][0]
     assert draft.read_bytes() == before
+
+
+@pytest.mark.parametrize('group_flag,member_flag', [(True, False), (False, True), (True, True)])
+def test_catalog_warning_is_once_per_cluster_and_never_a_record_warning(monkeypatch, group_flag, member_flag):
+    monkeypatch.delenv('CAPA_DATA_DIR', raising=False)
+    monkeypatch.setenv('MAP_DASHBOARD_RUN_ID', RUN)
+    payload = {'status': 'completed', 'created_at': '2026-01-01', 'records': [
+        {'id': 'A', 'finalCluster': 7, 'missing': member_flag, 'similarity': .91},
+        {'id': 'B', 'finalCluster': 7, 'missing': member_flag, 'similarity': .93},
+        {'id': 'C', 'finalCluster': 8, 'missing': False, 'similarity': .90},
+        {'id': 'UNASSIGNED', 'finalCluster': None, 'missing': True},
+    ], 'clusters': [dict(group(), missing=group_flag),
+                   {'id': 8, 'historicalTitle': 'Other pattern', 'historicalSummary': 'Other context'},
+                   {'id': None, 'missing': True}]}
+    before = deepcopy(payload)
+    with patch.object(runs, 'results', return_value=payload), patch.object(dashboard, 'source_context', return_value={
+        'fields': {}, 'capas': [], 'metadata': {}, 'available': False,
+    }), TestClient(app) as client:
+        for route in ['/map/dataset', f'/api/v1/map/runs/{RUN}/dataset']:
+            response = client.get(route)
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data['records']) == 4 and len(data['clusters']) == 2
+            assert len(data['clusters'][0]['warnings']) == 1
+            assert 'Cluster 7' in data['clusters'][0]['warnings'][0]
+            assert data['clusters'][1]['warnings'] == []
+            assert data['clusters'][0]['match'] == 92
+            for record in data['records'][:3]:
+                assert record['warnings'] == []
+                assert not any('cluster catalogue' in signal for signal in record['matchSignals'])
+            assert data['records'][3]['warnings'] == ['No cluster assignment is available. Review this record separately.']
+    assert payload == before
 
 
 def write_catalog(path, data):

@@ -124,6 +124,7 @@ def dataset(run_id):
     context = source_context(payload)
     saved = annotations.read(run_id) if 'CAPA_DATA_DIR' in os.environ else {}
     records, months = [], set()
+    missing_catalog_clusters = set()
     known_clusters = {str(group['id']) for group in payload['clusters'] if group['id'] is not None}
     for row in payload['records']:
         fields = context['fields'].get(row['id'], {})
@@ -135,8 +136,8 @@ def dataset(run_id):
         source = row.get('source', {})
         cluster_id = str(row['finalCluster']) if row.get('finalCluster') is not None else ''
         warnings = []
-        if row.get('missing'):
-            warnings.append(f'Cluster {cluster_id or "unavailable"} has no historical name or description in the cluster catalogue. The cluster description needs to be completed; this does not indicate that record {row["id"]} is incorrectly assigned.')
+        if row.get('missing') and cluster_id in known_clusters:
+            missing_catalog_clusters.add(cluster_id)
         if not cluster_id or cluster_id not in known_clusters:
             warnings.append('No cluster assignment is available. Review this record separately.')
         signals = []
@@ -176,8 +177,12 @@ def dataset(run_id):
         members = [row for row in records if row['clusterId'] == str(group['id'])]
         scores = [row['similarity'] for row in members if row['similarity'] is not None]
         ids = {row['id'] for row in members}
+        warnings = []
+        if group.get('missing') or str(group['id']) in missing_catalog_clusters:
+            warnings.append(f'Cluster {group["id"]} has no historical name or description in the cluster catalogue. The cluster description needs to be completed; this does not indicate that its records are incorrectly assigned.')
         clusters.append({'id': str(group['id']), **cluster_context(group, run_id, len(members)),
                          'match': round(sum(scores) / len(scores) * 100, 2) if scores else None,
+                         'warnings': warnings,
                          'capas': [item for item in context['capas'] if ids.intersection(item['recordIds'])]})
     return {'clusters': clusters, 'records': records, 'months': sorted(months),
             'refreshedAt': payload.get('updated_at') or payload.get('created_at') or 'Not available',

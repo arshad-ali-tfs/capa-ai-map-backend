@@ -66,7 +66,7 @@ MAP also provides saved analysis history, progress/cancellation, downloadable re
 
 The record review dataset also supplies the six saved 5W1H outputs (Who, What, When, Where, Why and How). The frontend shows them separately from the original source narrative. Opening a record reads the selected run; it does not regenerate output or incur a model call.
 
-Close scores between the first and second cluster do not trigger `Needs review`. This applies to saved-run presentation and future pipelines. Future exports keep the legacy `close_assignment_review` column as `False` and leave its former threshold blank; raw similarity, score gap and assignments are preserved. Old run files are not rewritten, so their diagnostic close flags may still appear in raw downloads/results. Missing historical cluster descriptions and unassigned records retain specific warnings. No additional LLM explanation calls are made.
+Close scores between the first and second cluster do not trigger `Needs review`. This applies to saved-run presentation and future pipelines. Future exports keep the legacy `close_assignment_review` column as `False` and leave its former threshold blank; raw similarity, score gap and assignments are preserved. Old run files are not rewritten, so their diagnostic close flags may still appear in raw downloads/results. Missing historical names or descriptions are reported once in the cluster's `warnings`, for display on the cluster detail screen. They do not flag member records or increase record review counts. Unassigned records retain their record-specific warning. No additional LLM explanation calls are made.
 
 ## Run locally
 
