@@ -120,9 +120,10 @@ def smoke_models(data: Path):
     vectors = embedded.filter(regex=r'^embedding_\d+$').to_numpy()
     if vectors.shape != (1, 1024) or not np.isfinite(vectors).all():
         raise ValueError('Offline BGE readiness check failed')
-    clustered, _ = cluster_embedded(embedded, data / 'assets')
+    clustered, stats = cluster_embedded(embedded, data / 'assets')
     if not np.isfinite(pd.to_numeric(clustered['cluster_similarity'])).all():
         raise ValueError('Offline historical cluster readiness check failed')
+    return stats['historical_catalog_coverage']
 
 
 def prepare(root, data, bundle, source=None, sheet=None):
@@ -135,8 +136,13 @@ def prepare(root, data, bundle, source=None, sheet=None):
     marker = data / '.setup/models.json'
     if read_json(marker).get('identity') != identity:
         print('Checking spaCy, BGE, UMAP and FAISS offline inside Docker. First use can take several minutes.', flush=True)
-        smoke_models(data)
-        write_json(marker, {'identity': identity, 'passed': True})
+        coverage = smoke_models(data)
+        write_json(marker, {'identity': identity, 'passed': True, 'historical_catalog_coverage': coverage})
+    coverage = read_json(marker).get('historical_catalog_coverage')
+    if coverage:
+        print(f"Historical catalogue: {coverage['labelled_model_clusters']}/{coverage['model_clusters']} clusters have complete descriptions; status={coverage['status']}.", flush=True)
+        if coverage['missing_cluster_ids']:
+            print(f"Missing historical descriptions: {coverage['missing_cluster_ids']}. Saved analysis summaries remain separate from historical definitions.", flush=True)
     print('Container preparation passed. No paid model calls were made.', flush=True)
 
 

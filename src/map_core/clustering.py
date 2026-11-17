@@ -5,6 +5,7 @@ import pandas as pd
 from pathlib import Path
 from prepare_assets import verify
 from run_map import load_models, transform_persisted_umap, EMBEDDING_COLUMNS
+from .catalog import reference_coverage
 
 
 def cluster_embedded(df: pd.DataFrame, inputs: Path, *, transform_mode: str = 'auto',
@@ -50,6 +51,9 @@ def cluster_embedded(df: pd.DataFrame, inputs: Path, *, transform_mode: str = 'a
         'close_assignments_for_review': 0,
         'close_assignment_review_enabled': False,
         'review_margin_threshold': None,
+        'historical_catalog_coverage': reference_coverage(
+            inputs / 'MAP_DPD_500_Reference_Cluster_Results.csv',
+            [int(merges.get(identifier, identifier)) for identifier in range(index.ntotal)]),
         'input_normalized_before_umap':bool(normalize_input),
         'note':'No retraining performed. Saved UMAP and FAISS state reused.'
     }

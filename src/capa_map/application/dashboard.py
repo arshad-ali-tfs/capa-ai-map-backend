@@ -89,6 +89,34 @@ def source_fields(payload):
     return source_context(payload)['fields']
 
 
+def cluster_context(group, run_id, record_count):
+    """Present saved batch output without promoting it to a historical definition."""
+    historical = {'title': group.get('historicalTitle') or '', 'summary': group.get('historicalSummary') or ''}
+    historical = historical if any(value.strip() for value in historical.values()) else None
+    analysis = None
+    if group.get('proposalScope') == 'current_batch_only':
+        title, summary = group.get('proposalTitle') or '', group.get('proposalSummary') or ''
+        if title.strip() or summary.strip():
+            analysis = {'title': title, 'summary': summary, 'recordCount': record_count, 'runId': run_id}
+    # An explicit legacy source marker identifies older run-generated summaries
+    # stored in the original summary columns. They are not historical profiles.
+    if group.get('summarySource') == 'openai_generated_unreviewed' and not group.get('proposalScope'):
+        analysis = {**historical, 'recordCount': record_count, 'runId': run_id} if historical else None
+        historical = None
+    historical_title = historical['title'] if historical and historical['title'].strip() else ''
+    analysis_title = analysis['title'] if analysis and analysis['title'].strip() else ''
+    title = historical_title or analysis_title or f'Cluster {group["id"]}'
+    if analysis and analysis['summary'].strip():
+        context, source = analysis['summary'], 'current_analysis'
+    elif historical and historical['summary'].strip():
+        context, source = historical['summary'], 'historical'
+    else:
+        context, source = 'No saved summary is available for this cluster.', 'unavailable'
+    return {'title': title, 'shortTitle': compact_title(title), 'subtitle': title,
+            'titleSource': 'historical' if historical_title else 'current_analysis' if analysis_title else 'unavailable',
+            'context': context, 'contextSource': source, 'analysisContext': analysis, 'historicalContext': historical}
+
+
 def dataset(run_id):
     payload = runs.results(run_id)
     if payload.get('status') != 'completed':
@@ -147,11 +175,9 @@ def dataset(run_id):
             continue
         members = [row for row in records if row['clusterId'] == str(group['id'])]
         scores = [row['similarity'] for row in members if row['similarity'] is not None]
-        title = group.get('historicalTitle') or 'Historical label unavailable'
         ids = {row['id'] for row in members}
-        clusters.append({'id': str(group['id']), 'title': title, 'shortTitle': compact_title(title), 'subtitle': title,
+        clusters.append({'id': str(group['id']), **cluster_context(group, run_id, len(members)),
                          'match': round(sum(scores) / len(scores) * 100, 2) if scores else None,
-                         'context': group.get('historicalSummary') or 'No historical summary was retained for this cluster.',
                          'capas': [item for item in context['capas'] if ids.intersection(item['recordIds'])]})
     return {'clusters': clusters, 'records': records, 'months': sorted(months),
             'refreshedAt': payload.get('updated_at') or payload.get('created_at') or 'Not available',

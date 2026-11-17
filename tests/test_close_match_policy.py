@@ -19,6 +19,7 @@ def test_future_clustering_never_flags_tied_or_close_scores(tmp_path):
     scores = np.array([[.99, .99], [.99, .989999], [.99, .7]], dtype=np.float32)
     candidates = np.array([[7, 8], [7, 8], [9, 8]])
     index = Mock()
+    index.ntotal = 10
     index.search.return_value = scores, candidates
     coords = np.ones((3, 2), dtype=np.float32)
     with patch.object(clustering, 'verify', return_value={}), \

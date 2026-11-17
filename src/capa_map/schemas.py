@@ -71,6 +71,16 @@ class DeviationRecord(Contract):
     monthCounts: dict[str, int]
 
 
+class HistoricalClusterContext(Contract):
+    title: str
+    summary: str
+
+
+class AnalysisClusterContext(HistoricalClusterContext):
+    recordCount: int = Field(ge=1)
+    runId: str = Field(pattern=r'^[a-f0-9]{32}$')
+
+
 class Cluster(Contract):
     id: str
     title: str
@@ -78,6 +88,10 @@ class Cluster(Contract):
     subtitle: str
     match: float | None
     context: str
+    contextSource: Literal['current_analysis', 'historical', 'unavailable']
+    titleSource: Literal['current_analysis', 'historical', 'unavailable']
+    analysisContext: AnalysisClusterContext | None
+    historicalContext: HistoricalClusterContext | None
     capas: list[CapaRelationship]
 
 
