@@ -55,6 +55,53 @@ def test_exact_source_dates_relationships_and_unassigned_accounting(analysis,tmp
     assert first['sourceNarrative'].endswith('20 mL on 12-May-2025.')
     assert {c['id'] for c in data['clusters'][0]['capas']}=={'CAPA-1','CAPA-2'}
     assert all(c['recordIds']==['001'] for c in data['clusters'][0]['capas'])
+    assert data['capas'] == data['clusters'][0]['capas']
+
+
+def test_decimal_export_relationships_include_unassigned_deviations(analysis, tmp_path, monkeypatch):
+    run_id, directory = analysis
+    csv_path = tmp_path / 'decimal-links.csv'
+    with csv_path.open('w', newline='', encoding='utf-8') as handle:
+        writer = csv.DictWriter(handle, fieldnames=['PR_ID', 'SITE', 'RECORD_TYPE', 'PARENT_ID', 'ROOT_PARENT_ID', 'STATUS'])
+        writer.writeheader()
+        writer.writerows({'SITE': 'Fictional site', **row} for row in [
+            {'PR_ID': '001', 'RECORD_TYPE': 'Deviation'},
+            {'PR_ID': '002', 'RECORD_TYPE': 'Deviation'},
+            {'PR_ID': 'CAPA-1', 'RECORD_TYPE': 'CAPA', 'PARENT_ID': '001.0', 'ROOT_PARENT_ID': '001', 'STATUS': 'Closed - Done'},
+            {'PR_ID': 'CAPA-2', 'RECORD_TYPE': 'CAPA', 'PARENT_ID': '002.000', 'ROOT_PARENT_ID': '001.0', 'STATUS': 'Closed - Done'},
+            {'PR_ID': 'CAPA-3', 'RECORD_TYPE': 'CAPA', 'PARENT_ID': '002', 'STATUS': 'Closed - Cancelled'},
+            {'PR_ID': 'CAPA-OTHER', 'RECORD_TYPE': 'CAPA', 'PARENT_ID': '999.0', 'STATUS': 'Closed - Done'},
+        ])
+    snapshot = import_snapshot(csv_path, tmp_path / 'decimal-sources')
+    repository = SqliteRecordRepository(snapshot)
+    state = runs.read_json(directory / 'status.json')
+    state['snapshot_id'] = repository.metadata()['snapshot_id']
+    runs.write_json(directory / 'status.json', state)
+    monkeypatch.setenv('CAPA_SOURCE_SNAPSHOT', str(snapshot))
+    with TestClient(app) as client:
+        response = client.get(f'/api/v1/map/runs/{run_id}/dataset')
+    assert response.status_code == 200
+    data = response.json()
+    assert {c['id']: c['recordIds'] for c in data['capas']} == {
+        'CAPA-1': ['001'], 'CAPA-2': ['001', '002'], 'CAPA-3': ['002'],
+    }
+    assert {c['id'] for c in data['clusters'][0]['capas']} == {'CAPA-1', 'CAPA-2'}
+    assert data['records'][1]['clusterId'] == ''
+    assert repository.get_record('CAPA-1').fields['parent_id'] == '001.0'
+
+
+@pytest.mark.parametrize('value, ids, expected', [
+    ('1608.0', {'1608'}, '1608'),
+    ('001.00', {'001', '1'}, '001'),
+    ('1608.0', {'1608', '1608.0'}, '1608.0'),
+    ('001.0', {'1'}, '001.0'),
+    ('1.5', {'1'}, '1.5'),
+    ('CAPA-1.0', {'CAPA-1'}, 'CAPA-1.0'),
+    ('1e3', {'1000'}, '1e3'),
+    (None, {'1'}, ''),
+])
+def test_parent_resolution_preserves_exact_and_ambiguous_source_identity(value, ids, expected):
+    assert dashboard.resolve_parent_id(value, ids) == expected
 
 
 def test_renamed_and_sdk_cached_snapshot_keep_dimensions(tmp_path,monkeypatch):

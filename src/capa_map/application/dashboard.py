@@ -2,14 +2,16 @@
 from contextlib import closing
 from datetime import datetime
 from functools import lru_cache
+from collections import Counter
 import csv
+import hashlib
 import json
 import os
 from pathlib import Path
 import posixpath
 import re
 import sqlite3
-from . import annotations, runs
+from . import annotations, runs, source_binding
 from ..infrastructure.storage import is_volume, local_file
 
 UNKNOWN = 'Not provided'
@@ -47,15 +49,22 @@ def source_context(payload):
         return empty
     if configured:
         sibling = (posixpath.dirname(configured) + '/' + snapshot_id + '.sqlite3') if is_volume(configured) else str(Path(configured).parent / (snapshot_id + '.sqlite3'))
-        for location in dict.fromkeys([configured, sibling]):
+        for location in dict.fromkeys([sibling, configured]):
             try:
                 target = local_file(location)
             except (FileNotFoundError, OSError):
                 continue
             with closing(sqlite3.connect(target.as_uri() + '?mode=ro', uri=True)) as connection:
                 metadata = json.loads(connection.execute('SELECT payload FROM metadata').fetchone()[0])
+                binding, directory = None, None
                 if metadata.get('snapshot_id') != snapshot_id:
-                    continue
+                    try:
+                        directory = runs.folder(payload.get('run_id', ''))
+                    except (OSError, ValueError, KeyError, TypeError):
+                        continue
+                    binding = source_binding.read_binding(directory, snapshot_id, metadata)
+                    if binding is None:
+                        continue
                 fields = {}
                 ids = [row['id'] for row in payload['records']]
                 for offset in range(0, len(ids), 400):
@@ -63,50 +72,72 @@ def source_context(payload):
                     query = 'SELECT pr_id,fields FROM records WHERE pr_id IN (' + ','.join('?' for _ in batch) + ')'
                     for record_id, values in connection.execute(query, batch):
                         fields[record_id] = json.loads(values)
+                if binding is not None and not source_binding.verify_source_rows(directory, binding, fields, payload['records']):
+                    continue
+                # Fetch only CAPA relationship/display fields, not every narrative.
                 capas = []
                 if ids:
                     selected = set(ids)
                     stamp = target.stat()
+                    source_ids = source_record_ids(str(target), stamp.st_size, stamp.st_mtime_ns)
                     for identifier, title, status, parent, root_parent in capa_rows(str(target), stamp.st_size, stamp.st_mtime_ns):
-                        parents = [str(value).strip() for value in (parent, root_parent) if value is not None]
+                        parents = [resolve_parent_id(value, source_ids) for value in (parent, root_parent)]
                         related = sorted(selected.intersection(parents))
                         if related:
                             capas.append({'id': identifier, 'description': title or UNKNOWN,
                                           'status': status or UNKNOWN, 'recordIds': related})
-                return {'fields': fields, 'capas': capas, 'metadata': metadata, 'available': True}
+                return {'fields': fields, 'capas': capas, 'metadata': metadata, 'available': True,
+                        'resolution': 'verified_equivalent_export' if binding is not None else 'original_snapshot'}
+    return csv_source_context(payload, snapshot_id, empty)
 
-    run_metadata = payload.get('metadata') or {}
-    source_csv = run_metadata.get('source_csv_path')
-    if source_csv and run_metadata.get('source_snapshot_id') == snapshot_id:
-        try:
-            target = Path(source_csv).resolve(strict=True)
-            data_root = Path(os.environ['CAPA_DATA_DIR']).resolve()
-            if target.is_relative_to(data_root) and target.suffix.lower() == '.csv':
-                selected = {str(row['id']) for row in payload['records']}
-                fields, capas, source_rows, accepted_ids = {}, [], 0, set()
-                with target.open(encoding='utf-8-sig', newline='') as handle:
-                    reader = csv.DictReader(handle)
-                    for original in reader:
-                        source_rows += 1
-                        values = {re.sub(r'[^a-z0-9]+', '_', str(key).strip().lower()).strip('_'): value or ''
-                                  for key, value in original.items() if key is not None}
-                        identifier = values.get('pr_id', '').strip()
-                        if identifier:
-                            accepted_ids.add(identifier)
-                        if identifier in selected and identifier not in fields:
-                            fields[identifier] = values
-                        if values.get('record_type', '').strip().casefold() == 'capa':
-                            parents = [values.get('parent_id', '').strip(), values.get('root_parent_id', '').strip()]
-                            related = sorted(selected.intersection(value for value in parents if value))
-                            if related:
-                                capas.append({'id': identifier, 'description': values.get('record_name') or UNKNOWN,
-                                              'status': values.get('status') or UNKNOWN, 'recordIds': related})
-                metadata = {'snapshot_id': snapshot_id, 'source_rows': source_rows,
-                            'accepted_rows': len(accepted_ids), 'source_file': target.name}
-                return {'fields': fields, 'capas': capas, 'metadata': metadata, 'available': True}
-        except (FileNotFoundError, OSError, KeyError):
-            pass
-    return empty
+
+def csv_source_context(payload, snapshot_id, empty):
+    """Read the content-addressed warehouse export retained by this run."""
+    metadata = payload.get('metadata') or {}
+    source_csv = metadata.get('source_csv_path')
+    if not source_csv or metadata.get('source_snapshot_id') != snapshot_id:
+        return empty
+    try:
+        target = Path(source_csv).resolve(strict=True)
+        data_root = Path(os.environ['CAPA_DATA_DIR']).resolve()
+        if not target.is_relative_to(data_root) or target.suffix.lower() != '.csv':
+            return empty
+        digest = hashlib.sha256()
+        with target.open('rb') as source:
+            for block in iter(lambda: source.read(1024 * 1024), b''):
+                digest.update(block)
+        if digest.hexdigest() != snapshot_id:
+            return empty
+        selected = {str(row['id']) for row in payload['records']}
+        fields, projections, source_ids, population = {}, [], set(), Counter()
+        source_rows = 0
+        with target.open(encoding='utf-8-sig', newline='') as handle:
+            for original in csv.DictReader(handle):
+                source_rows += 1
+                values = {re.sub(r'[^a-z0-9]+', '_', str(key).strip().lower()).strip('_'): value or ''
+                          for key, value in original.items() if key is not None}
+                identifier = values.get('pr_id', '').strip()
+                if not identifier or identifier in source_ids:
+                    continue
+                source_ids.add(identifier)
+                record_type = values.get('record_type', '').strip().casefold()
+                population[{'deviation':'Deviation','capa':'CAPA'}.get(record_type,record_type)] += 1
+                if identifier in selected:
+                    fields[identifier] = values
+                if record_type == 'capa':
+                    projections.append((identifier, values.get('record_name'), values.get('status'),
+                                        values.get('parent_id'), values.get('root_parent_id')))
+        capas = []
+        for identifier, title, status, parent, root_parent in projections:
+            related = sorted(selected.intersection(resolve_parent_id(value, source_ids) for value in (parent, root_parent)))
+            if related:
+                capas.append({'id':identifier,'description':title or UNKNOWN,'status':status or UNKNOWN,'recordIds':related})
+        return {'fields':fields,'capas':capas,'available':True,'resolution':'original_snapshot',
+                'population':dict(population),
+                'metadata':{'snapshot_id':snapshot_id,'source_rows':source_rows,'accepted_rows':len(source_ids),
+                            'source_file':target.name,'source_table':metadata.get('source_table')}}
+    except (OSError, KeyError, ValueError):
+        return empty
 
 
 @lru_cache(maxsize=4)
@@ -116,6 +147,26 @@ def capa_rows(path, size, modified):
         return tuple(connection.execute("""SELECT pr_id, title, status,
             json_extract(fields, '$.parent_id'), json_extract(fields, '$.root_parent_id')
             FROM records WHERE lower(record_type) = 'capa'"""))
+
+
+@lru_cache(maxsize=4)
+def source_record_ids(path, size, modified):
+    with closing(sqlite3.connect(Path(path).as_uri() + '?mode=ro', uri=True)) as connection:
+        return frozenset(row[0] for row in connection.execute('SELECT pr_id FROM records'))
+
+
+def resolve_parent_id(value, source_ids):
+    """Resolve spreadsheet integer-as-decimal links without changing source IDs.
+
+    Exact IDs always win, including IDs outside the selected analysis. Strip
+    only a zero decimal suffix, retaining leading zeros and nonnumeric IDs.
+    """
+    text = str(value).strip() if value is not None else ''
+    if text in source_ids:
+        return text
+    integer = re.fullmatch(r'([0-9]+)\.0+', text)
+    candidate = integer.group(1) if integer else ''
+    return candidate if candidate in source_ids else text
 
 
 def source_fields(payload):
@@ -217,11 +268,13 @@ def dataset(run_id):
                          'match': round(sum(scores) / len(scores) * 100, 2) if scores else None,
                          'warnings': warnings,
                          'capas': [item for item in context['capas'] if ids.intersection(item['recordIds'])]})
-    return {'clusters': clusters, 'records': records, 'months': sorted(months),
+    return {'clusters': clusters, 'records': records, 'capas': context['capas'], 'months': sorted(months),
             'refreshedAt': payload.get('updated_at') or payload.get('created_at') or 'Not available',
             'analysis': {'runId': run_id, 'recordCount': len(records),
                          'sourceRecordCount': context['metadata'].get('accepted_rows'),
                          'snapshotId': payload.get('snapshot_id') or payload.get('metadata', {}).get('source_snapshot_id'),
+                         'resolvedSnapshotId': context['metadata'].get('snapshot_id'),
+                         'sourceResolution': context.get('resolution', 'unavailable'),
                          'sourceAvailable': context['available'], 'sourceMode': payload.get('source_mode', 'historical'),
                          'selection': 'configured' if os.getenv('MAP_DASHBOARD_RUN_ID', '').strip() else 'latest_completed'}}
 

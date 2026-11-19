@@ -101,6 +101,8 @@ class AnalysisCoverage(Contract):
     recordCount: int = Field(ge=0)
     sourceRecordCount: int | None = Field(ge=0)
     snapshotId: str | None
+    resolvedSnapshotId: str | None = None
+    sourceResolution: Literal['original_snapshot', 'verified_equivalent_export', 'unavailable'] = 'unavailable'
     sourceAvailable: bool
     sourceMode: str
     selection: Literal['configured', 'latest_completed']
@@ -109,6 +111,7 @@ class AnalysisCoverage(Contract):
 class MapDataset(Contract):
     clusters: list[Cluster]
     records: list[DeviationRecord]
+    capas: list[CapaRelationship]
     months: list[str]
     refreshedAt: str
     analysis: AnalysisCoverage

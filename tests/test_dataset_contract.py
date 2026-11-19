@@ -28,7 +28,8 @@ def test_dataset_preserves_identity_source_and_does_not_fabricate_missing_values
     assert row['daysOpen'] is None and row['monthCounts']=={}
     assert result['clusters'][0]['match']==91
     assert 'capa' not in result['clusters'][0]
-    assert set(result)=={'clusters','records','months','refreshedAt','analysis'}
+    assert set(result)=={'clusters','records','capas','months','refreshedAt','analysis'}
+    assert result['capas'] == [] and not result['analysis']['sourceAvailable']
     assert row['similarity']==.91 and row['warnings']==[]
     assert result['analysis']['recordCount']==1
 
