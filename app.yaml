@@ -1,0 +1,6 @@
+command: ['python', '-m', 'capa_map.cli']
+env:
+  - name: CAPA_ENV
+    value: databricks
+  - name: MAP_HOST
+    value: '0.0.0.0'

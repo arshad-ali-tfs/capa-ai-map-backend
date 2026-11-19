@@ -1,0 +1,34 @@
+{
+  "artifact_set": "DPD persisted model",
+  "source_folder": "dpd_folder",
+  "source_folder_id": "1j8GQESa",
+  "model_timestamp": "2026-08-25 06:29",
+  "export_timestamp_utc": "2026-09-10T13:20:59.015423+00:00",
+  "artifacts": [
+    {
+      "filename": "dpd_umap_model_2026-08-25 06:29.pkl",
+      "size_bytes": 554794352,
+      "sha256": "e335a733535a4cb88e1576fd8fb10c12a4c3aab5985ddc0bb503d89e582bfd14"
+    },
+    {
+      "filename": "dpd_umap_select_cols_2026-08-25 06:29.pkl",
+      "size_bytes": 216,
+      "sha256": "ee207eabbbd2ba89f0ab6afe64b2e3ec2635de03737df8a420fde90b80fef415"
+    },
+    {
+      "filename": "dpd_faiss_kmeans_centroids_2026-08-25 06:29.pkl",
+      "size_bytes": 4353,
+      "sha256": "99b1ded1261da9a337ab7da8e05f59803964397d06822de15fc5962ac8f438bc"
+    },
+    {
+      "filename": "dpd_faiss_centroid_index_2026-08-25 06:29.faiss",
+      "size_bytes": 4397,
+      "sha256": "e1d88755acecac671393430c15ef1bee8f5a7b7bee56cc08bac9ebc08fcbb74a"
+    },
+    {
+      "filename": "dpd_cluster_merge_2026-08-25 06:29.pkl",
+      "size_bytes": 5,
+      "sha256": "926248e52d1fa532c317e37da24ed652ae64110f8219cb5e061668bd3091f048"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+# Keep the complete source CSV in the repository using Git Large File Storage.
+data/sources/trackwise_records.csv filter=lfs diff=lfs merge=lfs -text
+# Preserve exact bytes for checksum verification on Windows and Linux.
+data/assets/** -text
+data/models/huggingface/hub/models--BAAI--bge-large-en-v1.5/** -text -whitespace linguist-vendored
+data/assets/*.pkl filter=lfs diff=lfs merge=lfs -text
+data/assets/*.faiss filter=lfs diff=lfs merge=lfs -text
+data/assets/MAP_DPD_500_*.csv filter=lfs diff=lfs merge=lfs -text
+data/models/huggingface/hub/models--BAAI--bge-large-en-v1.5/snapshots/*/*.safetensors filter=lfs diff=lfs merge=lfs -text
