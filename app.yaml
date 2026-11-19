@@ -14,12 +14,17 @@ env:
   - name: OPENAI_REASONING_EFFORT
     value: "medium"
 
-  - name: CAPA_DATA_DIR
-    value: "./data"
-  - name: CAPA_SOURCE_SNAPSHOT
-    value: "./data/sources/b658a555be5ec4c9a7e4018f8e4cdcb9c604418fb5b5370fe953576521ddc655.sqlite3"
-  - name: CAPA_SOURCE_CSV
-    value: "./data/sources/trackwise_records.csv"
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: CAPA_SOURCE_TABLE
+    valueFrom: table
+
+  # - name: CAPA_DATA_DIR
+  #   value: "./data"
+  # - name: CAPA_SOURCE_SNAPSHOT
+  #   value: "./data/sources/b658a555be5ec4c9a7e4018f8e4cdcb9c604418fb5b5370fe953576521ddc655.sqlite3"
+  # - name: CAPA_SOURCE_CSV
+  #   value: "./data/sources/trackwise_records.csv"
   - name: MAP_ASSETS_DIR
     value: "./data/assets"
 

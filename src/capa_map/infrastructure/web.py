@@ -15,7 +15,9 @@ def create_service(name='map', repository=None):
         raise RuntimeError('Databricks mode requires the Databricks Apps identity proxy.')
     if repository is None and os.getenv('CAPA_SOURCE_SNAPSHOT'):
         from .storage import local_file
-        repository = SqliteRecordRepository(local_file(os.environ['CAPA_SOURCE_SNAPSHOT']))
+        # repository = SqliteRecordRepository(local_file(os.environ['CAPA_SOURCE_SNAPSHOT']))
+        from capa_map.infrastructure.databricks_repo import DatabricksRecordRepository
+        repository = DatabricksRecordRepository()
     app = FastAPI(title='CAPA.AI MAP API', version='0.1.0')
     origins = json.loads(os.getenv('MAP_CORS_ORIGINS', '["http://127.0.0.1:5173", "http://localhost:5173"]'))
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=['GET', 'POST', 'PUT'], allow_headers=['Content-Type'])

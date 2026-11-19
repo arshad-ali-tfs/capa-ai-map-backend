@@ -112,3 +112,5 @@ wrapt==2.5.2
 xxhash==4.1.0
 zstandard==0.25.0
 setuptools==84.2.1
+databricks-sql-connector>=3.0
+databricks-sdk
