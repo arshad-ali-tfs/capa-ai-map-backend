@@ -1,6 +1,34 @@
 command: ['python', '-m', 'capa_map.cli']
 env:
   - name: CAPA_ENV
-    value: databricks
+    value: "databricks"
   - name: MAP_HOST
-    value: '0.0.0.0'
+    value: "0.0.0.0"
+
+  - name: OPENAI_API_KEY
+    valueFrom: openai-api-key
+  - name: OPENAI_BASE_URL
+    value: "https://api.openai.com/v1"
+  - name: OPENAI_MODEL
+    value: "gpt-6.1-sol"
+  - name: OPENAI_REASONING_EFFORT
+    value: "medium"
+
+  - name: CAPA_DATA_DIR
+    value: "./data"
+  - name: CAPA_SOURCE_SNAPSHOT
+    value: "./data/sources/b658a555be5ec4c9a7e4018f8e4cdcb9c604418fb5b5370fe953576521ddc655.sqlite3"
+  - name: CAPA_SOURCE_CSV
+    value: "./data/sources/trackwise_records.csv"
+  - name: MAP_ASSETS_DIR
+    value: "./data/assets"
+
+  - name: HF_HOME
+    value: "./data/models/huggingface"
+  - name: HF_HUB_OFFLINE
+    value: "1"
+  - name: TRANSFORMERS_OFFLINE
+    value: "1"
+
+  - name: MAP_DASHBOARD_RUN_ID
+    value: ""
