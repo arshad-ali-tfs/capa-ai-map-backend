@@ -15,7 +15,7 @@ env:
     value: "medium"
 
   - name: DATABRICKS_WAREHOUSE_ID
-    valueFrom: sql-warehouse
+    valueFrom: 2939ce9a4abed449
   - name: CAPA_SOURCE_TABLE
     valueFrom: table
 
