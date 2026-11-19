@@ -8,7 +8,7 @@ from pathlib import Path
 import posixpath
 import re
 import sqlite3
-from . import annotations, runs
+from . import annotations, runs, source_binding
 from ..infrastructure.storage import is_volume, local_file
 
 UNKNOWN = 'Not provided'
@@ -45,15 +45,22 @@ def source_context(payload):
     if not configured or not re.fullmatch(r'[a-f0-9]{64}', str(snapshot_id or '')):
         return empty
     sibling = (posixpath.dirname(configured) + '/' + snapshot_id + '.sqlite3') if is_volume(configured) else str(Path(configured).parent / (snapshot_id + '.sqlite3'))
-    for location in dict.fromkeys([configured, sibling]):
+    for location in dict.fromkeys([sibling, configured]):
         try:
             target = local_file(location)
         except (FileNotFoundError, OSError):
             continue
         with closing(sqlite3.connect(target.as_uri() + '?mode=ro', uri=True)) as connection:
             metadata = json.loads(connection.execute('SELECT payload FROM metadata').fetchone()[0])
+            binding, directory = None, None
             if metadata.get('snapshot_id') != snapshot_id:
-                continue
+                try:
+                    directory = runs.folder(payload.get('run_id', ''))
+                except (OSError, ValueError, KeyError, TypeError):
+                    continue
+                binding = source_binding.read_binding(directory, snapshot_id, metadata)
+                if binding is None:
+                    continue
             fields = {}
             ids = [row['id'] for row in payload['records']]
             for offset in range(0, len(ids), 400):
@@ -61,18 +68,22 @@ def source_context(payload):
                 query = 'SELECT pr_id,fields FROM records WHERE pr_id IN (' + ','.join('?' for _ in batch) + ')'
                 for record_id, values in connection.execute(query, batch):
                     fields[record_id] = json.loads(values)
+            if binding is not None and not source_binding.verify_source_rows(directory, binding, fields, payload['records']):
+                continue
             # Fetch only CAPA relationship/display fields, not every narrative.
             capas = []
             if ids:
                 selected = set(ids)
                 stamp = target.stat()
+                source_ids = source_record_ids(str(target), stamp.st_size, stamp.st_mtime_ns)
                 for identifier, title, status, parent, root_parent in capa_rows(str(target), stamp.st_size, stamp.st_mtime_ns):
-                    parents = [str(value).strip() for value in (parent, root_parent) if value is not None]
+                    parents = [resolve_parent_id(value, source_ids) for value in (parent, root_parent)]
                     related = sorted(selected.intersection(parents))
                     if related:
                         capas.append({'id': identifier, 'description': title or UNKNOWN,
                                       'status': status or UNKNOWN, 'recordIds': related})
-            return {'fields': fields, 'capas': capas, 'metadata': metadata, 'available': True}
+            return {'fields': fields, 'capas': capas, 'metadata': metadata, 'available': True,
+                    'resolution': 'verified_equivalent_export' if binding is not None else 'original_snapshot'}
     return empty
 
 
@@ -83,6 +94,26 @@ def capa_rows(path, size, modified):
         return tuple(connection.execute("""SELECT pr_id, title, status,
             json_extract(fields, '$.parent_id'), json_extract(fields, '$.root_parent_id')
             FROM records WHERE lower(record_type) = 'capa'"""))
+
+
+@lru_cache(maxsize=4)
+def source_record_ids(path, size, modified):
+    with closing(sqlite3.connect(Path(path).as_uri() + '?mode=ro', uri=True)) as connection:
+        return frozenset(row[0] for row in connection.execute('SELECT pr_id FROM records'))
+
+
+def resolve_parent_id(value, source_ids):
+    """Resolve spreadsheet integer-as-decimal links without changing source IDs.
+
+    Exact IDs always win, including IDs outside the selected analysis. Strip
+    only a zero decimal suffix, retaining leading zeros and nonnumeric IDs.
+    """
+    text = str(value).strip() if value is not None else ''
+    if text in source_ids:
+        return text
+    integer = re.fullmatch(r'([0-9]+)\.0+', text)
+    candidate = integer.group(1) if integer else ''
+    return candidate if candidate in source_ids else text
 
 
 def source_fields(payload):
@@ -184,11 +215,13 @@ def dataset(run_id):
                          'match': round(sum(scores) / len(scores) * 100, 2) if scores else None,
                          'warnings': warnings,
                          'capas': [item for item in context['capas'] if ids.intersection(item['recordIds'])]})
-    return {'clusters': clusters, 'records': records, 'months': sorted(months),
+    return {'clusters': clusters, 'records': records, 'capas': context['capas'], 'months': sorted(months),
             'refreshedAt': payload.get('updated_at') or payload.get('created_at') or 'Not available',
             'analysis': {'runId': run_id, 'recordCount': len(records),
                          'sourceRecordCount': context['metadata'].get('accepted_rows'),
                          'snapshotId': payload.get('snapshot_id') or payload.get('metadata', {}).get('source_snapshot_id'),
+                         'resolvedSnapshotId': context['metadata'].get('snapshot_id'),
+                         'sourceResolution': context.get('resolution', 'unavailable'),
                          'sourceAvailable': context['available'], 'sourceMode': payload.get('source_mode', 'historical'),
                          'selection': 'configured' if os.getenv('MAP_DASHBOARD_RUN_ID', '').strip() else 'latest_completed'}}
 
