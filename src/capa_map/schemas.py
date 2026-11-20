@@ -120,3 +120,43 @@ class MapDataset(Contract):
     months: list[str]
     refreshedAt: str
     analysis: AnalysisCoverage
+
+
+class InsightRank(Contract):
+    label: str
+    count: int = Field(gt=0)
+    percent: float = Field(ge=0, le=100)
+
+
+class InsightRanking(Contract):
+    rows: list[InsightRank] = Field(max_length=3)
+    knownCount: int = Field(ge=0)
+    missingCount: int = Field(ge=0)
+    distinctCount: int = Field(ge=0)
+    topCount: int = Field(ge=0)
+    topShare: float = Field(ge=0, le=100)
+    cutoffTied: bool
+    fields: list[str]
+    recordedCount: int = Field(ge=0)
+    mappedCount: int = Field(ge=0)
+    basis: str
+    unavailableReason: str
+
+
+class DeviationInsights(Contract):
+    runId: str
+    scope: Literal['source_snapshot']
+    available: bool
+    snapshotId: str | None
+    asOf: str
+    dateFrom: str
+    dateTo: str
+    sourceRecordCount: int | None = Field(ge=0)
+    deviationCount: int | None = Field(ge=0)
+    windowDeviationCount: int | None = Field(ge=0)
+    undatedCount: int = Field(ge=0)
+    futureDatedCount: int = Field(ge=0)
+    latestOpened: str | None
+    clients: InsightRanking
+    stages: InsightRanking
+    products: InsightRanking
