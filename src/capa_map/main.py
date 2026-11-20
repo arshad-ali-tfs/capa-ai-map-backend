@@ -7,7 +7,7 @@ from fastapi import HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
 from capa_map.infrastructure.web import create_service
-from .application import annotations, runs
+from .application import annotations, runs, curation
 from .schemas import Annotation, AnnotationCollection, MapDataset
 from filelock import Timeout
 
@@ -29,6 +29,7 @@ class RunRequest(BaseModel):
     normalize_input: bool = False
     summary_mode: Literal['live', 'pending', 'reference'] = 'live'
     quality: bool = False
+    selection_strategy: Literal['stratified','recent','source_order'] = 'stratified'
 
     @model_validator(mode='after')
     def validate_type_policy(self):
@@ -66,6 +67,66 @@ class AnnotationRequest(BaseModel):
     expected_revision: int = Field(ge=0)
 
 
+class CurationRequest(BaseModel):
+    operation: Literal['cluster','assignment','split','reset_cluster','reset_assignment']
+    expected_revision: int = Field(ge=0)
+    cluster_id: str = Field(default='',max_length=80,pattern=r'^[A-Za-z0-9_-]*$')
+    record_id: str = Field(default='',max_length=200)
+    title: str = Field(default='',max_length=300)
+    theme: str = Field(default='',max_length=200)
+    status: Literal['needs_review','reviewed'] = 'needs_review'
+    reviewer: str = Field(min_length=1,max_length=200)
+    rationale: str = Field(min_length=10,max_length=4000)
+
+
+@app.get('/api/v1/map/runs/{run_id}/curation')
+def read_curation(run_id:str):
+    try:
+        return {**curation.read(run_id),'themes':curation.THEMES}
+    except (ValueError,FileNotFoundError) as error:
+        missing(error)
+
+
+@app.put('/api/v1/map/runs/{run_id}/curation')
+def save_curation(run_id:str,request:CurationRequest):
+    try:
+        return {**curation.save(run_id,request),'themes':curation.THEMES}
+    except (runs.RunBusyError,Timeout) as error:
+        raise HTTPException(409,detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(422,detail=str(error)) from error
+    except FileNotFoundError as error:
+        missing(error)
+
+
+@app.get('/api/v1/map/runs/{run_id}/compare')
+def compare_runs(run_id:str,other_run_id:str):
+    from .application.quality import digest
+    try:
+        left,right=runs.results(run_id),runs.results(other_run_id)
+    except (ValueError,FileNotFoundError) as error:
+        missing(error)
+    if left.get('status')!='completed' or right.get('status')!='completed':
+        raise HTTPException(409,detail='Both analyses must be completed.')
+    before={row['id']:row for row in right['records']}
+    changes=[]
+    shared=0
+    for row in left['records']:
+        previous=before.get(row['id'])
+        if not previous:
+            continue
+        shared+=1
+        fields=[key for key in runs.FIVEWH if row.get('fields',{}).get(key)!=previous.get('fields',{}).get(key)]
+        source_changed=digest(row.get('source',{}))!=digest(previous.get('source',{}))
+        moved=row.get('finalCluster')!=previous.get('finalCluster')
+        if fields or moved or source_changed:
+            changes.append({'id':row['id'],'fromCluster':previous.get('finalCluster'),'toCluster':row.get('finalCluster'),
+                            'changedExtractionFields':fields,'sourceChanged':source_changed,'assignmentChanged':moved})
+    return {'runId':run_id,'otherRunId':other_run_id,'sharedRecords':shared,'changedRecords':len(changes),
+            'assignmentChanges':sum(row['assignmentChanged'] for row in changes),'changes':changes,
+            'interpretation':'Different saved extractions or source inputs do not isolate a batch-size effect. Original outputs are compared; reviewer overlays are excluded.'}
+
+
 @app.get('/api/v1/map/runs/{run_id}/annotations', response_model=AnnotationCollection)
 def record_annotations(run_id: str):
     try:
@@ -95,7 +156,7 @@ def missing(error):
 @app.get('/api/v1/map/options')
 def options():
     return {'defaults': RunRequest().model_dump(), 'limits': {'records': 100000, 'zero_limit_means_all': True},
-            'choices': {'stopwords': ['spacy', 'none'], 'cluster_mode': ['auto', 'transform', 'training-only'], 'summary_mode': ['live', 'pending', 'reference']},
+            'choices': {'stopwords': ['spacy', 'none'], 'cluster_mode': ['auto', 'transform', 'training-only'], 'summary_mode': ['live', 'pending', 'reference'], 'selection_strategy':['stratified','recent','source_order']},
             'embedding_model': os.getenv('MAP_BGE_MODEL', 'BAAI/bge-large-en-v1.5'),
             'algorithm': 'Sol3fields + BGE + persisted UMAP + FAISS', 'legacy': runs.legacy_catalog(),
             'review_scope': 'cluster_summary_only'}
