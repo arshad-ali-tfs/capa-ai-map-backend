@@ -288,3 +288,10 @@ Use `Run-Map.ps1`: Python and pinned dependencies are installed inside the Docke
 Local Docker execution is verified. Databricks still needs persistent source/model/run storage, secrets, frontend-to-backend authentication and target-environment acceptance checks. The current worker/file-lock design serves a single instance; horizontal scaling requires external job coordination and shared durable state.
 
 Cluster context shows the already-saved AI summary for the selected analysis, with a separately labelled historical reference where available. Historical names remain stable; missing names use the saved analysis title. Summary record counts describe the full cluster in that analysis, independent of UI filters. Future setup and pipeline diagnostics report missing historical catalogue coverage; the reference catalogue is not completed using a small batch summary.
+
+
+## MAP deadline and cluster-group presentation fields
+
+The dataset includes nullable ISO-calendar `dueDate` (DATE_TO_CLOSE; compatible due_date/date_due aliases), `closedDate` (DATE_CLOSED), and `dueStatus`: closed_on_time, closed_late, open_overdue, open_within_due, cancelled or unavailable. Closure uses retained IS_CLOSED/status; inconsistent states, invalid chronology and missing dates are unavailable. Same-day closure is on time; due today is not overdue. `analysis.deadlineAsOf` is the UTC assessment date. Source records and saved analysis artifacts are read without regeneration.
+
+`clusters[].parentTheme` exposes the cluster group. Suggested groups use the saved analysis title and retained DR type with the existing 12-category taxonomy. Stable grouping does not change historical titles, scores or memberships. The experiment retains its existing reviewed-group overrides.

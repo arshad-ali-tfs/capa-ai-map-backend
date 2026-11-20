@@ -2,13 +2,7 @@
 from filelock import FileLock
 from . import runs
 
-THEMES = [
-    'Analytical testing', 'Manufacturing process', 'Equipment and utilities',
-    'Cleaning and contamination control', 'Packaging and labelling', 'Materials and components',
-    'Documentation and data integrity', 'Training and procedural execution',
-    'Environmental and microbiological control', 'Storage and transport',
-    'Product complaints and adverse events', 'Other / needs classification',
-]
+from .grouping import THEMES
 
 
 def empty():
