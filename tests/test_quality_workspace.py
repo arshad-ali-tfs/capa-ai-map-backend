@@ -37,7 +37,7 @@ def test_current_theme_conflict_is_flagged_even_when_assignment_score_is_high(cl
     data=api.get(f'/api/v1/map/runs/{RUN}/dataset').json()
     assert data['clusters'][0]['title']=='Product — reported lack of efficacy'
     assert data['clusters'][0]['historicalContext']['title'].startswith('Analytical testing')
-    assert any('different quality themes' in text for text in data['records'][0]['warnings'])
+    assert any('different cluster groups' in text for text in data['records'][0]['warnings'])
     assert data['records'][0]['sourceMentions'][0]['value']=='EQ-001'
 
 def test_review_title_and_membership_overlay_never_rewrite_original_analysis(client):

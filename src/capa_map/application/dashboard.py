@@ -11,6 +11,8 @@ from pathlib import Path
 import posixpath
 import re
 import sqlite3
+from .deadlines import timing, current_day
+from .grouping import suggested_group
 from . import annotations, runs, source_binding, curation, quality
 from ..infrastructure.storage import is_volume, local_file
 
@@ -220,6 +222,7 @@ def dataset(run_id):
         review_state=curation.read(run_id) if 'CAPA_DATA_DIR' in os.environ else curation.empty()
     except FileNotFoundError:
         review_state=curation.empty()
+    as_of = current_day()
     records, months = [], set()
     missing_catalog_clusters = set()
     known_clusters = {str(group['id']) for group in payload['clusters'] if group['id'] is not None}
@@ -249,6 +252,7 @@ def dataset(run_id):
             'department': fields.get('responsible_department') or UNKNOWN, 'year': str(opened.year) if opened else UNKNOWN,
             'criticality': fields.get('criticality') or fields.get('initial_criticality') or UNKNOWN,
             'status': fields.get('status') or UNKNOWN, 'opened': opened_text,
+            **timing(fields, as_of),
             'createdLabel': fields.get('date_created') or UNKNOWN,
             'drType': row.get('type') or UNKNOWN,
             **{key: fields.get(column) or UNKNOWN for key, column in [('building','building'),('room','room'),('suite','suite'),('productionArea','production_area'),('productionLine','production_line')]},
@@ -285,7 +289,7 @@ def dataset(run_id):
     extra=quality.enrich(records,clusters,payload,context,review_state)
     return {'clusters': clusters, 'records': records, 'capas': context['capas'], 'months': sorted(months),'review':extra['review'],
             'refreshedAt': payload.get('updated_at') or payload.get('created_at') or 'Not available',
-            'analysis': {'runId': run_id, 'recordCount': len(records),
+            'analysis': {'runId': run_id, 'recordCount': len(records), 'deadlineAsOf': as_of.isoformat(),
                          'sourceRecordCount': context['metadata'].get('accepted_rows'),
                          'snapshotId': payload.get('snapshot_id') or payload.get('metadata', {}).get('source_snapshot_id'),
                          'resolvedSnapshotId': context['metadata'].get('snapshot_id'),

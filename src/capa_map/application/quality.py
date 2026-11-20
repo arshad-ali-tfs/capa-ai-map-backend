@@ -3,40 +3,17 @@ from collections import Counter
 import hashlib
 import json
 import re
-from .curation import THEMES
+from .grouping import THEMES, parent_theme, suggested_group
 
 
 def digest(value):
     return hashlib.sha256(json.dumps(value,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
 
 
-def parent_theme(title, records):
-    text=title.lower()
-    rules=[
-        (10,r'lack of (?:efficacy|effect)|adverse|complaint|reported.*(?:damage|tablet)|product.*(?:appearance|defect)'),
-        (8,r'environmental monitor|microbio|aseptic|sterility|bioburden|endotoxin'),
-        (9,r'transport|shipment|shipping|storage|cold.chain|distribution'),
-        (4,r'packag|labell|labeling|line clearance|mix.up|carton|blister'),
-        (3,r'cleaning|contamination|foreign (?:matter|particle)|particulat'),
-        (0,r'analyt|laborator|hplc|uplc|sst|assay|dissolution|reference standard|chromatog|stability'),
-        (2,r'equipment|calibrat|utility|utilities|hvac|power|alarm|sensor|maintenance'),
-        (5,r'material|component|supplier|incoming|raw ingredient'),
-        (6,r'document|data (?:handling|integrity)|record|instruction|signature|traceab|procedure'),
-        (7,r'train|operator|personnel|execution|human error'),
-        (1,r'manufactur|process|granulat|encapsulat|compress|blend|yield|coating|filling'),
-    ]
-    for index,pattern in rules:
-        if re.search(pattern,text):
-            return THEMES[index]
-    if records and all(row.get('drType')=='Product Complaint' for row in records):
-        return THEMES[10]
-    return THEMES[-1]
-
-
 def titles_differ(historical, current):
     left,right=parent_theme(historical,[]),parent_theme(current,[])
     # Different wording alone is not an assignment defect. Flag a concrete
-    # disagreement between recognized quality themes; unknown labels remain
+    # disagreement between recognized cluster groups; unknown labels remain
     # unreviewed without a fabricated semantic-confidence score.
     return left!=right and THEMES[-1] not in {left,right}
 
@@ -81,7 +58,7 @@ def enrich(records, clusters, payload, context, state):
         members=[row for row in records if row['clusterId']==key]
         ids={row['id'] for row in members}
         cluster['membershipChanged']=ids!=original_members.get(key,set())
-        cluster['parentTheme']=parent_theme(cluster['title'],members)
+        cluster['parentTheme']=suggested_group(cluster,members)
         cluster['reviewStatus']='needs_review'
         cluster['themeSource']='suggested'
         cluster['reviewedContext']=None
@@ -95,7 +72,7 @@ def enrich(records, clusters, payload, context, state):
             cluster.update(title=review['title'],shortTitle=review['title'][:80],subtitle=review['title'],titleSource='reviewed',
                            parentTheme=review['theme'],reviewStatus=review['status'],themeSource='reviewed')
         if different and not (review and review['status']=='reviewed'):
-            review_reasons.append('The catalogue label and this analysis description indicate different quality themes. Confirm the theme and member records; the analysis title is an unreviewed proposal.')
+            review_reasons.append('The catalogue label and this analysis description indicate different cluster groups. Confirm the theme and member records; the analysis title is an unreviewed proposal.')
         if cluster['membershipChanged']:
             review_reasons.append('Reviewer membership changes are active. Saved AI context describes the original members and has not been regenerated.')
         cluster['warnings'].extend(review_reasons)
