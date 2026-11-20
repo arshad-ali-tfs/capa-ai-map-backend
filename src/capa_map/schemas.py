@@ -50,6 +50,9 @@ class DeviationRecord(Contract):
     criticality: str
     status: str
     opened: str
+    dueDate: str | None = None
+    closedDate: str | None = None
+    dueStatus: Literal['closed_on_time', 'closed_late', 'open_overdue', 'open_within_due', 'cancelled', 'unavailable'] = 'unavailable'
     createdLabel: str
     drType: str
     building: str
@@ -82,6 +85,7 @@ class AnalysisClusterContext(HistoricalClusterContext):
 
 
 class Cluster(Contract):
+    parentTheme: str = 'Other / needs classification'
     id: str
     title: str
     shortTitle: str
@@ -105,6 +109,7 @@ class AnalysisCoverage(Contract):
     sourceResolution: Literal['original_snapshot', 'verified_equivalent_export', 'unavailable'] = 'unavailable'
     sourceAvailable: bool
     sourceMode: str
+    deadlineAsOf: str = ''
     selection: Literal['configured', 'latest_completed']
 
 
