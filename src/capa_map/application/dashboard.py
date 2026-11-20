@@ -2,6 +2,7 @@
 from contextlib import closing
 from datetime import datetime
 from functools import lru_cache
+import csv
 import json
 import os
 from pathlib import Path
@@ -42,37 +43,69 @@ def source_context(payload):
     snapshot_id = payload.get('snapshot_id') or payload.get('metadata', {}).get('source_snapshot_id')
     configured = os.getenv('CAPA_SOURCE_SNAPSHOT')
     empty = {'fields': {}, 'capas': [], 'metadata': {}, 'available': False}
-    if not configured or not re.fullmatch(r'[a-f0-9]{64}', str(snapshot_id or '')):
+    if not re.fullmatch(r'[a-f0-9]{64}', str(snapshot_id or '')):
         return empty
-    sibling = (posixpath.dirname(configured) + '/' + snapshot_id + '.sqlite3') if is_volume(configured) else str(Path(configured).parent / (snapshot_id + '.sqlite3'))
-    for location in dict.fromkeys([configured, sibling]):
-        try:
-            target = local_file(location)
-        except (FileNotFoundError, OSError):
-            continue
-        with closing(sqlite3.connect(target.as_uri() + '?mode=ro', uri=True)) as connection:
-            metadata = json.loads(connection.execute('SELECT payload FROM metadata').fetchone()[0])
-            if metadata.get('snapshot_id') != snapshot_id:
+    if configured:
+        sibling = (posixpath.dirname(configured) + '/' + snapshot_id + '.sqlite3') if is_volume(configured) else str(Path(configured).parent / (snapshot_id + '.sqlite3'))
+        for location in dict.fromkeys([configured, sibling]):
+            try:
+                target = local_file(location)
+            except (FileNotFoundError, OSError):
                 continue
-            fields = {}
-            ids = [row['id'] for row in payload['records']]
-            for offset in range(0, len(ids), 400):
-                batch = ids[offset:offset + 400]
-                query = 'SELECT pr_id,fields FROM records WHERE pr_id IN (' + ','.join('?' for _ in batch) + ')'
-                for record_id, values in connection.execute(query, batch):
-                    fields[record_id] = json.loads(values)
-            # Fetch only CAPA relationship/display fields, not every narrative.
-            capas = []
-            if ids:
-                selected = set(ids)
-                stamp = target.stat()
-                for identifier, title, status, parent, root_parent in capa_rows(str(target), stamp.st_size, stamp.st_mtime_ns):
-                    parents = [str(value).strip() for value in (parent, root_parent) if value is not None]
-                    related = sorted(selected.intersection(parents))
-                    if related:
-                        capas.append({'id': identifier, 'description': title or UNKNOWN,
-                                      'status': status or UNKNOWN, 'recordIds': related})
-            return {'fields': fields, 'capas': capas, 'metadata': metadata, 'available': True}
+            with closing(sqlite3.connect(target.as_uri() + '?mode=ro', uri=True)) as connection:
+                metadata = json.loads(connection.execute('SELECT payload FROM metadata').fetchone()[0])
+                if metadata.get('snapshot_id') != snapshot_id:
+                    continue
+                fields = {}
+                ids = [row['id'] for row in payload['records']]
+                for offset in range(0, len(ids), 400):
+                    batch = ids[offset:offset + 400]
+                    query = 'SELECT pr_id,fields FROM records WHERE pr_id IN (' + ','.join('?' for _ in batch) + ')'
+                    for record_id, values in connection.execute(query, batch):
+                        fields[record_id] = json.loads(values)
+                capas = []
+                if ids:
+                    selected = set(ids)
+                    stamp = target.stat()
+                    for identifier, title, status, parent, root_parent in capa_rows(str(target), stamp.st_size, stamp.st_mtime_ns):
+                        parents = [str(value).strip() for value in (parent, root_parent) if value is not None]
+                        related = sorted(selected.intersection(parents))
+                        if related:
+                            capas.append({'id': identifier, 'description': title or UNKNOWN,
+                                          'status': status or UNKNOWN, 'recordIds': related})
+                return {'fields': fields, 'capas': capas, 'metadata': metadata, 'available': True}
+
+    run_metadata = payload.get('metadata') or {}
+    source_csv = run_metadata.get('source_csv_path')
+    if source_csv and run_metadata.get('source_snapshot_id') == snapshot_id:
+        try:
+            target = Path(source_csv).resolve(strict=True)
+            data_root = Path(os.environ['CAPA_DATA_DIR']).resolve()
+            if target.is_relative_to(data_root) and target.suffix.lower() == '.csv':
+                selected = {str(row['id']) for row in payload['records']}
+                fields, capas, source_rows, accepted_ids = {}, [], 0, set()
+                with target.open(encoding='utf-8-sig', newline='') as handle:
+                    reader = csv.DictReader(handle)
+                    for original in reader:
+                        source_rows += 1
+                        values = {re.sub(r'[^a-z0-9]+', '_', str(key).strip().lower()).strip('_'): value or ''
+                                  for key, value in original.items() if key is not None}
+                        identifier = values.get('pr_id', '').strip()
+                        if identifier:
+                            accepted_ids.add(identifier)
+                        if identifier in selected and identifier not in fields:
+                            fields[identifier] = values
+                        if values.get('record_type', '').strip().casefold() == 'capa':
+                            parents = [values.get('parent_id', '').strip(), values.get('root_parent_id', '').strip()]
+                            related = sorted(selected.intersection(value for value in parents if value))
+                            if related:
+                                capas.append({'id': identifier, 'description': values.get('record_name') or UNKNOWN,
+                                              'status': values.get('status') or UNKNOWN, 'recordIds': related})
+                metadata = {'snapshot_id': snapshot_id, 'source_rows': source_rows,
+                            'accepted_rows': len(accepted_ids), 'source_file': target.name}
+                return {'fields': fields, 'capas': capas, 'metadata': metadata, 'available': True}
+        except (FileNotFoundError, OSError, KeyError):
+            pass
     return empty
 
 

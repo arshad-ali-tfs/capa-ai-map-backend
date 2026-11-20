@@ -1,4 +1,5 @@
 """MAP workers invoke the packaged original Sol3fields/BGE/UMAP/FAISS stages."""
+import hashlib
 import json
 import os
 import re
@@ -27,14 +28,46 @@ def run(directory: Path):
         from capa_map.infrastructure.storage import local_directory, local_file
         from capa_map.infrastructure.data.repository import SqliteRecordRepository
         synthetic = request.get('source_mode') == 'synthetic'
+        source_csv_path = None
+        source_table = None
         if synthetic:
             from capa_map.infrastructure.synthetic import SYNTHETIC_RECORD
             source = directory / 'synthetic_source.csv'
             pd.DataFrame([SYNTHETIC_RECORD]).to_csv(source, index=False)
             snapshot_id = 'synthetic-fixture-v1'
         else:
-            source = local_file(os.environ['CAPA_SOURCE_CSV'])
-            snapshot_id = SqliteRecordRepository(local_file(os.environ['CAPA_SOURCE_SNAPSHOT'])).metadata()['snapshot_id']
+            configured_csv = os.getenv('CAPA_SOURCE_CSV')
+            configured_snapshot = os.getenv('CAPA_SOURCE_SNAPSHOT')
+            if configured_csv or configured_snapshot:
+                if not configured_csv or not configured_snapshot:
+                    raise ValueError('Configure both CAPA_SOURCE_CSV and CAPA_SOURCE_SNAPSHOT, or configure CAPA_SOURCE_TABLE.')
+                source = local_file(configured_csv)
+                snapshot_id = SqliteRecordRepository(local_file(configured_snapshot)).metadata()['snapshot_id']
+            elif os.getenv('CAPA_SOURCE_TABLE'):
+                from capa_map.infrastructure.databricks_repo import DatabricksRecordRepository
+                source_dir = Path(os.environ['CAPA_DATA_DIR']) / 'sources'
+                source_dir.mkdir(parents=True, exist_ok=True)
+                temporary_source = source_dir / f'.{request["run_id"]}.csv'
+                source_table = os.environ['CAPA_SOURCE_TABLE']
+                try:
+                    DatabricksRecordRepository(source_table).export_csv(
+                        temporary_source, require_root_parent=not request.get('allow_any_root', False))
+                except Exception:
+                    temporary_source.unlink(missing_ok=True)
+                    raise
+                digest = hashlib.sha256()
+                with temporary_source.open('rb') as handle:
+                    for block in iter(lambda: handle.read(1024 * 1024), b''):
+                        digest.update(block)
+                snapshot_id = digest.hexdigest()
+                source = source_dir / (snapshot_id + '.csv')
+                if source.exists():
+                    temporary_source.unlink()
+                else:
+                    temporary_source.replace(source)
+                source_csv_path = str(source.resolve())
+            else:
+                raise ValueError('Configure CAPA_SOURCE_TABLE or both CAPA_SOURCE_CSV and CAPA_SOURCE_SNAPSHOT.')
         assets = local_directory(os.environ['MAP_ASSETS_DIR'])
         frame, report = raw_to_filtered(source, limit=0,
             require_root_deviation=not request.get('allow_any_root', False),
@@ -63,6 +96,9 @@ def run(directory: Path):
                          ('exclude_dr_types', []), ('stopwords', 'spacy'), ('batch_size', 32), ('cluster_mode', 'auto'),
                          ('normalize_input', False), ('summary_mode', 'live'), ('quality', False)]},
                         inputs=['detailed_description', 'investigation', 'conclusion'])
+        if source_csv_path:
+            metadata['source_csv_path'] = source_csv_path
+            metadata['source_table'] = source_table
         save_json(metadata, directory / 'run_metadata.json')
         frame = prepare_stage(frame, directory)
         update('running', 'Translating and extracting 5W1H')
