@@ -89,7 +89,7 @@ def source_context(payload):
                             capas.append({'id': identifier, 'description': title or UNKNOWN,
                                           'status': status or UNKNOWN, 'recordIds': related})
                 stamp=target.stat()
-                return {'fields': fields, 'capas': capas, 'metadata': metadata, 'available': True,
+                return {'fields': fields, 'capas': capas, 'metadata': metadata, 'available': True, '_snapshot_path': str(target),
                         'population':source_population(str(target),stamp.st_size,stamp.st_mtime_ns),
                         'resolution': 'verified_equivalent_export' if binding is not None else 'original_snapshot'}
     return csv_source_context(payload, snapshot_id, empty)
@@ -137,7 +137,7 @@ def csv_source_context(payload, snapshot_id, empty):
             related = sorted(selected.intersection(resolve_parent_id(value, source_ids) for value in (parent, root_parent)))
             if related:
                 capas.append({'id':identifier,'description':title or UNKNOWN,'status':status or UNKNOWN,'recordIds':related})
-        return {'fields':fields,'capas':capas,'available':True,'resolution':'original_snapshot',
+        return {'fields':fields,'capas':capas,'available':True,'resolution':'original_snapshot','_csv_path':str(target),
                 'population':dict(population),
                 'metadata':{'snapshot_id':snapshot_id,'source_rows':source_rows,'accepted_rows':len(source_ids),
                             'source_file':target.name,'source_table':metadata.get('source_table')}}

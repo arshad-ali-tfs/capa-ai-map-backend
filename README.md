@@ -295,3 +295,23 @@ Cluster context shows the already-saved AI summary for the selected analysis, wi
 The dataset includes nullable ISO-calendar `dueDate` (DATE_TO_CLOSE; compatible due_date/date_due aliases), `closedDate` (DATE_CLOSED), and `dueStatus`: closed_on_time, closed_late, open_overdue, open_within_due, cancelled or unavailable. Closure uses retained IS_CLOSED/status; inconsistent states, invalid chronology and missing dates are unavailable. Same-day closure is on time; due today is not overdue. `analysis.deadlineAsOf` is the UTC assessment date. Source records and saved analysis artifacts are read without regeneration.
 
 `clusters[].parentTheme` exposes the cluster group. Suggested groups use the saved analysis title and retained DR type with the existing 12-category taxonomy. Stable grouping does not change historical titles, scores or memberships. The experiment retains its existing reviewed-group overrides.
+
+
+### Deviation insights: source-wide 12-month rankings
+
+`GET /api/v1/map/runs/{run_id}/insights?as_of=YYYY-MM-DD` counts all `Deviation`
+records in that run's verified source snapshot, separately from the analysed
+sample. The optional date is a reporting calendar date; the UI sends the user's
+local date. The inclusive window starts on the same calendar date one year
+earlier (29 February falls back to 28 February). Date opened determines inclusion;
+invalid/missing and future dates are reported separately. CAPA records are excluded.
+
+Rankings use recorded client/customer and product-name/code/ID fields. Blank or
+absent data is reported as unavailable; narrative text and product-impact flags
+are never substituted for identities. Stages prefer an explicit recorded stage,
+otherwise specific process-step rules, then an unambiguous responsible department.
+Examples: Secondary Packaging -> Packaging; Analytical Testing -> QC;
+Filling -> Manufacturing. Ambiguous combined departments remain unmapped unless
+the process step establishes a stage. Counts, mapping coverage, missing values,
+ties and denominators are included. Third-place ties sort alphabetically.
+No paid model calls, re-embedding or clustering are required.
