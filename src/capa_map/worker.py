@@ -6,6 +6,26 @@ import re
 from pathlib import Path
 import sys
 from datetime import datetime, timezone
+from typing import Literal, Mapping
+
+
+def _source_configuration(environ: Mapping[str, str] | None = None) -> tuple[Literal['csv', 'table'], str, str]:
+    environ = os.environ if environ is None else environ
+    table = environ.get('CAPA_SOURCE_TABLE', '')
+    if environ.get('CAPA_ENV', 'local') == 'databricks':
+        if not table:
+            raise ValueError('Databricks mode requires CAPA_SOURCE_TABLE; flat-file sources are disabled.')
+        return 'table', table, ''
+
+    configured_csv = environ.get('CAPA_SOURCE_CSV', '')
+    configured_snapshot = environ.get('CAPA_SOURCE_SNAPSHOT', '')
+    if configured_csv or configured_snapshot:
+        if not configured_csv or not configured_snapshot:
+            raise ValueError('Configure both CAPA_SOURCE_CSV and CAPA_SOURCE_SNAPSHOT, or configure CAPA_SOURCE_TABLE.')
+        return 'csv', configured_csv, configured_snapshot
+    if table:
+        return 'table', table, ''
+    raise ValueError('Configure CAPA_SOURCE_TABLE or both CAPA_SOURCE_CSV and CAPA_SOURCE_SNAPSHOT.')
 
 
 def run(directory: Path):
@@ -36,19 +56,16 @@ def run(directory: Path):
             pd.DataFrame([SYNTHETIC_RECORD]).to_csv(source, index=False)
             snapshot_id = 'synthetic-fixture-v1'
         else:
-            configured_csv = os.getenv('CAPA_SOURCE_CSV')
-            configured_snapshot = os.getenv('CAPA_SOURCE_SNAPSHOT')
-            if configured_csv or configured_snapshot:
-                if not configured_csv or not configured_snapshot:
-                    raise ValueError('Configure both CAPA_SOURCE_CSV and CAPA_SOURCE_SNAPSHOT, or configure CAPA_SOURCE_TABLE.')
-                source = local_file(configured_csv)
-                snapshot_id = SqliteRecordRepository(local_file(configured_snapshot)).metadata()['snapshot_id']
-            elif os.getenv('CAPA_SOURCE_TABLE'):
+            source_kind, source_location, snapshot_location = _source_configuration()
+            if source_kind == 'csv':
+                source = local_file(source_location)
+                snapshot_id = SqliteRecordRepository(local_file(snapshot_location)).metadata()['snapshot_id']
+            else:
                 from capa_map.infrastructure.databricks_repo import DatabricksRecordRepository
                 source_dir = Path(os.environ['CAPA_DATA_DIR']) / 'sources'
                 source_dir.mkdir(parents=True, exist_ok=True)
                 temporary_source = source_dir / f'.{request["run_id"]}.csv'
-                source_table = os.environ['CAPA_SOURCE_TABLE']
+                source_table = source_location
                 try:
                     DatabricksRecordRepository(source_table).export_csv(
                         temporary_source, require_root_parent=not request.get('allow_any_root', False))
@@ -66,8 +83,6 @@ def run(directory: Path):
                 else:
                     temporary_source.replace(source)
                 source_csv_path = str(source.resolve())
-            else:
-                raise ValueError('Configure CAPA_SOURCE_TABLE or both CAPA_SOURCE_CSV and CAPA_SOURCE_SNAPSHOT.')
         assets = local_directory(os.environ['MAP_ASSETS_DIR'])
         frame, report = raw_to_filtered(source, limit=0,
             require_root_deviation=not request.get('allow_any_root', False),

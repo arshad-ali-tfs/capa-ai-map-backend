@@ -50,6 +50,21 @@ class MapLocalFlowTest(unittest.TestCase):
                 prepared = prepare_text(frame, language_detection=False)
             self.assertIn('pump', prepared.iloc[0]['concat_columns_cleaned'])
 
+    def test_filter_accepts_boolean_closed_values_from_sql_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            gtw = Path(tmp) / 'gtw.csv'
+            pd.DataFrame([
+                {'PR_ID': '10', 'PSG_Division': 'DPD', 'RECORD_TYPE': 'Deviation',
+                 'STATUS': 'Closed - Done', 'IS_CLOSED': True, 'ROOT_PARENT_RECORD_TYPE': 'Deviation',
+                 'DETAILED_DESCRIPTION': 'A pump was stopped.'},
+                {'PR_ID': '11', 'PSG_Division': 'DPD', 'RECORD_TYPE': 'Deviation',
+                 'STATUS': 'Closed - Done', 'IS_CLOSED': False, 'ROOT_PARENT_RECORD_TYPE': 'Deviation',
+                 'DETAILED_DESCRIPTION': 'Another event.'},
+            ]).to_csv(gtw, index=False)
+            frame, report = raw_to_filtered(gtw)
+            self.assertEqual(frame.pr_id.tolist(), ['10'])
+            self.assertEqual(report['selected_rows'], 1)
+
     def test_summary_never_autoapproves(self):
         frame = pd.DataFrame([{'pr_id': '1', 'final_cluster_id': 3, 'what': 'pump issue',
                                'who': 'operator', 'when': 'N/A', 'where': 'line',

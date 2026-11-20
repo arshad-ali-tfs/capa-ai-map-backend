@@ -13,7 +13,13 @@ def create_service(name='map', repository=None):
         raise ValueError('This application serves MAP only.')
     if os.getenv('CAPA_ENV', 'local') == 'databricks' and not os.getenv('DATABRICKS_APP_NAME'):
         raise RuntimeError('Databricks mode requires the Databricks Apps identity proxy.')
-    if repository is None and os.getenv('CAPA_SOURCE_SNAPSHOT'):
+    if repository is None and os.getenv('CAPA_ENV', 'local') == 'databricks':
+        source_table = os.getenv('CAPA_SOURCE_TABLE')
+        if not source_table:
+            raise RuntimeError('Databricks mode requires CAPA_SOURCE_TABLE; flat-file sources are disabled.')
+        from capa_map.infrastructure.databricks_repo import DatabricksRecordRepository
+        repository = DatabricksRecordRepository(source_table)
+    elif repository is None and os.getenv('CAPA_SOURCE_SNAPSHOT'):
         from .storage import local_file
         repository = SqliteRecordRepository(local_file(os.environ['CAPA_SOURCE_SNAPSHOT']))
     elif repository is None and os.getenv('CAPA_SOURCE_TABLE'):

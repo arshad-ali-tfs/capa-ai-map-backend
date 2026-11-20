@@ -71,7 +71,8 @@ def raw_to_filtered(gtw_file: Path, *, limit: int = 0, division: str = 'DPD',
         & data['status'].fillna('').str.strip().str.casefold().eq('closed - done')
     )
     if 'is_closed' in data:
-        mask &= pd.to_numeric(data['is_closed'], errors='coerce').eq(1)
+        closed = data['is_closed'].fillna('').str.strip().str.casefold()
+        mask &= closed.isin({'1', '1.0', 'true', 'yes', 'y'})
     if require_root_deviation:
         if 'root_parent_record_type' not in data:
             raise ValueError('ROOT_PARENT_RECORD_TYPE missing; use --allow-any-root after review')
@@ -113,7 +114,7 @@ def raw_to_filtered(gtw_file: Path, *, limit: int = 0, division: str = 'DPD',
               'dr_type_policy_status': 'explicit_operator_policy' if include_dr_types or exclude_dr_types else 'not_confirmed_no_dr_type_restriction',
               'division': division, 'rules': [
                   f'PSG_Division={division}', 'RECORD_TYPE=Deviation', 'STATUS=Closed - Done',
-                  'IS_CLOSED=1 when present',
+                  'IS_CLOSED=true/1 when present',
                   'ROOT_PARENT_RECORD_TYPE=Deviation' if require_root_deviation else 'root-parent rule disabled',
                   'DETAILED_DESCRIPTION not empty' if require_description else 'description rule disabled'],
               'source_file': str(gtw_file)}

@@ -33,7 +33,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest==9.2.0", "httpx==0.28.1"]
-databricks = ["databricks-sdk>=0.89,<1"]
+databricks = ["databricks-sdk>=0.89,<1", "databricks-sql-connector>=4.9.0,<5"]
 
 [project.scripts]
 map-api = "capa_map.cli:serve"
