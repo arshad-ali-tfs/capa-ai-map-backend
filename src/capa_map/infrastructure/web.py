@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .data.repository import SqliteRecordRepository
 
 logger = logging.getLogger(__name__)
+logging.getLogger('capa_map').setLevel(logging.INFO)
 
 
 def _diagnostic_route(path: str) -> str:

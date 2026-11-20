@@ -3,6 +3,7 @@ from io import StringIO
 import mimetypes
 import logging
 import os
+import time
 from typing import Literal
 from fastapi import HTTPException, Query
 from fastapi.responses import FileResponse
@@ -14,6 +15,21 @@ from filelock import Timeout
 
 app = create_service('map')
 logger = logging.getLogger(__name__)
+_last_dataset_warning: tuple[str, str] | None = None
+_last_dataset_warning_at = 0.0
+
+
+def log_dataset_unavailable(error):
+    global _last_dataset_warning, _last_dataset_warning_at
+    signature = (type(error).__name__, str(error))
+    now = time.monotonic()
+    if signature != _last_dataset_warning or now - _last_dataset_warning_at >= 30:
+        logger.warning(
+            'map_dataset_unavailable status=503 error_type=%s reason=%s',
+            signature[0], signature[1],
+        )
+        _last_dataset_warning = signature
+        _last_dataset_warning_at = now
 
 
 class RunRequest(BaseModel):
@@ -251,8 +267,5 @@ def frontend_dataset():
     except Timeout as error:
         raise HTTPException(409, detail='Annotations are being updated. Please retry.') from error
     except (ValueError, FileNotFoundError) as error:
-        logger.warning(
-            'map_dataset_unavailable status=503 error_type=%s reason=%s',
-            type(error).__name__, str(error),
-        )
+        log_dataset_unavailable(error)
         raise HTTPException(503, detail=str(error)) from error
