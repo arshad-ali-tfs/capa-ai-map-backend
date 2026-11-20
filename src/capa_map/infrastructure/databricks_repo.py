@@ -1,11 +1,14 @@
 import csv
 import hashlib
+import logging
 import os
 import re
+import time
 from databricks import sql
 from databricks.sdk.core import Config
 from capa_map.infrastructure.contracts import SourceRecord
 
+logger = logging.getLogger(__name__)
 _cfg = Config()  # app service principal auth, provided automatically by Apps
 
 
@@ -86,22 +89,40 @@ class DatabricksRecordRepository:
         """Write the source table to a CSV consumed by the existing MAP pipeline."""
         destination = os.fspath(destination)
         os.makedirs(os.path.dirname(destination), exist_ok=True)
-        with _connect() as conn, conn.cursor() as cur, open(destination, "w", encoding="utf-8-sig", newline="") as out:
-            cur.execute(f"SELECT * FROM {self.qualified_table} ORDER BY PR_ID")
-            columns = [description[0] for description in cur.description]
-            normalized = {re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_") for name in columns}
-            required = {"pr_id", "psg_division", "record_type", "status", "detailed_description", "investigation", "conclusion"}
-            if require_root_parent:
-                required.add("root_parent_record_type")
-            missing = sorted(required - normalized)
-            if missing:
-                raise ValueError("CAPA_SOURCE_TABLE is missing MAP input columns: " + ", ".join(missing))
-            writer = csv.writer(out)
-            writer.writerow(columns)
-            while batch := cur.fetchmany(1000):
-                for row in batch:
-                    writer.writerow([
-                        value.isoformat() if hasattr(value, "isoformat") else "" if value is None else str(value)
-                        for value in row
-                    ])
+        started = time.perf_counter()
+        row_count = 0
+        logger.info(
+            "warehouse_export_started table=%s warehouse_id=%s",
+            self.table, os.environ.get("DATABRICKS_WAREHOUSE_ID", "missing"),
+        )
+        try:
+            with _connect() as conn, conn.cursor() as cur, open(destination, "w", encoding="utf-8-sig", newline="") as out:
+                cur.execute(f"SELECT * FROM {self.qualified_table} ORDER BY PR_ID")
+                columns = [description[0] for description in cur.description]
+                normalized = {re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_") for name in columns}
+                required = {"pr_id", "psg_division", "record_type", "status", "detailed_description", "investigation", "conclusion"}
+                if require_root_parent:
+                    required.add("root_parent_record_type")
+                missing = sorted(required - normalized)
+                if missing:
+                    raise ValueError("CAPA_SOURCE_TABLE is missing MAP input columns: " + ", ".join(missing))
+                writer = csv.writer(out)
+                writer.writerow(columns)
+                while batch := cur.fetchmany(1000):
+                    for row in batch:
+                        writer.writerow([
+                            value.isoformat() if hasattr(value, "isoformat") else "" if value is None else str(value)
+                            for value in row
+                        ])
+                    row_count += len(batch)
+        except Exception as error:
+            logger.exception(
+                "warehouse_export_failed table=%s error_type=%s",
+                self.table, type(error).__name__,
+            )
+            raise
+        logger.info(
+            "warehouse_export_completed table=%s rows=%d bytes=%d elapsed_seconds=%.2f",
+            self.table, row_count, os.path.getsize(destination), time.perf_counter() - started,
+        )
         return destination

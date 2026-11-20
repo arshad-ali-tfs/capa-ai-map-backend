@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import hashlib
 from io import StringIO
 import json
+import logging
 import math
 import os
 from pathlib import Path
@@ -15,6 +16,7 @@ from uuid import uuid4
 import psutil
 from filelock import FileLock
 
+logger = logging.getLogger(__name__)
 
 class RunBusyError(RuntimeError):
     pass
@@ -168,14 +170,21 @@ def start(limit: int, pr_ids: list[str], source_mode: str = 'historical', **opti
         write_json(directory / 'status.json', {'run_id': run_id, 'status': 'queued', 'stage': 'Starting'})
         python = os.getenv('CAPA_MAP_PYTHON') or sys.executable
         flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        logger.info(
+            'map_worker_starting run_id=%s source_mode=%s limit=%d requested_pr_id_count=%d',
+            run_id, source_mode, limit, len(pr_ids),
+        )
         try:
-            with (directory / 'worker.log').open('wb') as log:
-                process = subprocess.Popen([python, '-u', '-m', 'capa_map.worker', str(directory)],
-                    stdout=log, stderr=log, env=os.environ.copy(), creationflags=flags)
+            process = subprocess.Popen(
+                [python, '-u', '-m', 'capa_map.worker', str(directory)],
+                env=os.environ.copy(), creationflags=flags,
+            )
             (directory / 'pid').write_text(str(process.pid), encoding='utf8')
         except OSError:
+            logger.exception('map_worker_start_failed run_id=%s', run_id)
             write_json(directory / 'status.json', {'run_id': run_id, 'status': 'failed', 'stage': 'Worker could not start'})
             raise
+        logger.info('map_worker_started run_id=%s pid=%s', run_id, process.pid)
         return {**request, 'status': 'queued'}
 
 

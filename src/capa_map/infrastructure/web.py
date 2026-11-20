@@ -1,11 +1,30 @@
 """MAP-only HTTP/source boundary. No other service is imported or proxied."""
 from dataclasses import asdict
 import json
+import logging
 import os
+import re
+import time
 from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from .data.repository import SqliteRecordRepository
+
+logger = logging.getLogger(__name__)
+
+
+def _diagnostic_route(path: str) -> str:
+    if path == '/map/dataset':
+        return 'map_dataset'
+    if path == '/api/v1/map/runs':
+        return 'map_runs'
+    if re.fullmatch(r'/api/v1/map/runs/[a-f0-9]{32}', path):
+        return 'map_run_status'
+    if path.startswith('/api/v1/map/runs/'):
+        return 'map_run_operation'
+    if path.startswith('/api/v1/map/'):
+        return 'map_api'
+    return 'other'
 
 
 def create_service(name='map', repository=None):
@@ -25,14 +44,39 @@ def create_service(name='map', repository=None):
     elif repository is None and os.getenv('CAPA_SOURCE_TABLE'):
         from capa_map.infrastructure.databricks_repo import DatabricksRecordRepository
         repository = DatabricksRecordRepository()
+    if os.getenv('CAPA_ENV', 'local') == 'databricks':
+        logger.info(
+            'map_source_configured mode=databricks source=unity_catalog_table table=%s warehouse_configured=%s',
+            os.getenv('CAPA_SOURCE_TABLE', ''),
+            bool(os.getenv('DATABRICKS_WAREHOUSE_ID')),
+        )
+    elif os.getenv('CAPA_SOURCE_CSV') and os.getenv('CAPA_SOURCE_SNAPSHOT'):
+        logger.info('map_source_configured mode=local source=csv_snapshot')
+    else:
+        logger.info('map_source_configured mode=%s source=other_or_unconfigured', os.getenv('CAPA_ENV', 'local'))
     app = FastAPI(title='CAPA.AI MAP API', version='0.1.0')
     origins = json.loads(os.getenv('MAP_CORS_ORIGINS', '["http://127.0.0.1:5173", "http://localhost:5173"]'))
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=['GET', 'POST', 'PUT'], allow_headers=['Content-Type'])
 
     @app.middleware('http')
     async def request_id(request, call_next):
-        response = await call_next(request)
-        response.headers['X-Request-ID'] = str(uuid4())
+        request_id = str(uuid4())
+        started = time.perf_counter()
+        route = _diagnostic_route(request.url.path)
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception(
+                'http_request_failed request_id=%s method=%s route=%s',
+                request_id, request.method, route,
+            )
+            raise
+        response.headers['X-Request-ID'] = request_id
+        logger.info(
+            'http_request_complete request_id=%s method=%s route=%s status=%d duration_ms=%.1f',
+            request_id, request.method, route, response.status_code,
+            (time.perf_counter() - started) * 1000,
+        )
         return response
 
     def source():

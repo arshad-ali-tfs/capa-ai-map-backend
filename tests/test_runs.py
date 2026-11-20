@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 from unittest.mock import patch
 import pytest
 from capa_map.application import runs
@@ -34,3 +35,10 @@ def test_one_active_worker_bounds_memory(tmp_path,monkeypatch):
     monkeypatch.setenv('CAPA_DATA_DIR',str(tmp_path))
     with patch.object(runs,'history',return_value=[{'status':'running'}]), pytest.raises(runs.RunBusyError):runs.start(1,[])
     assert not list(runs.root().glob('*/request.json'))
+
+def test_worker_inherits_app_logs(tmp_path,monkeypatch):
+    monkeypatch.setenv('CAPA_DATA_DIR',str(tmp_path))
+    with patch.object(runs.subprocess,'Popen',return_value=SimpleNamespace(pid=123)) as process:
+        runs.start(1,[])
+    assert process.call_args.kwargs.get('stdout') is None
+    assert process.call_args.kwargs.get('stderr') is None

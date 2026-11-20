@@ -1,5 +1,6 @@
 import csv
 import json
+import logging
 from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
@@ -118,11 +119,15 @@ def test_configured_dataset_contract_and_no_additional_services(monkeypatch,payl
         assert client.post('/api/v1/map/runs/'+('b'*32)+'/annotations',json={}).status_code==405
 
 
-def test_missing_run_is_visible_and_does_not_return_sample_data(monkeypatch):
+def test_missing_run_is_visible_and_does_not_return_sample_data(monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
     monkeypatch.delenv('MAP_DASHBOARD_RUN_ID',raising=False)
     with patch.object(runs,'history',return_value=[]),TestClient(app) as client:
         response=client.get('/map/dataset')
         assert response.status_code==503 and 'detail' in response.json()
+        assert response.headers.get('x-request-id')
+    assert 'map_dataset_unavailable status=503' in caplog.text
+    assert 'route=map_dataset status=503' in caplog.text
 
 
 def test_map_source_api_stays_within_map(tmp_path,monkeypatch):
