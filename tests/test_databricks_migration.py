@@ -55,6 +55,15 @@ def test_edited_export_cannot_masquerade_as_the_saved_source(warehouse_run):
     assert not dashboard.source_context(payload)['available']
 
 
+def test_retained_warehouse_snapshot_supports_long_investigation_fields(warehouse_run):
+    source,payload=warehouse_run
+    narrative='Original investigation. '+('Fictional evidence. '*10000)+'Limit <0.10%.'
+    source.write_text(source.read_text(encoding='utf-8-sig').replace('Original limit <0.10% and result >0.20%.',narrative),encoding='utf-8-sig')
+    snapshot=hashlib.sha256(source.read_bytes()).hexdigest()
+    payload['snapshot_id']=payload['metadata']['source_snapshot_id']=snapshot
+    assert dashboard.source_context(payload)['fields']['001']['detailed_description']==narrative
+
+
 def test_source_path_outside_run_storage_is_not_accepted(warehouse_run,monkeypatch,tmp_path):
     _,payload=warehouse_run
     monkeypatch.setenv('CAPA_DATA_DIR',str(tmp_path/'different-root'))

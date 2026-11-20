@@ -111,6 +111,7 @@ def csv_source_context(payload, snapshot_id, empty):
         selected = {str(row['id']) for row in payload['records']}
         fields, projections, source_ids, population = {}, [], set(), Counter()
         source_rows = 0
+        csv.field_size_limit(2**31 - 1)
         with target.open(encoding='utf-8-sig', newline='') as handle:
             for original in csv.DictReader(handle):
                 source_rows += 1
@@ -136,7 +137,7 @@ def csv_source_context(payload, snapshot_id, empty):
                 'population':dict(population),
                 'metadata':{'snapshot_id':snapshot_id,'source_rows':source_rows,'accepted_rows':len(source_ids),
                             'source_file':target.name,'source_table':metadata.get('source_table')}}
-    except (OSError, KeyError, ValueError):
+    except (OSError, KeyError, ValueError, csv.Error):
         return empty
 
 
