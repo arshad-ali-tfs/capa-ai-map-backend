@@ -38,9 +38,9 @@ def test_source_snapshot_fields_dates_and_duplicates_are_preserved(tmp_path,monk
     source=tmp_path/'source.csv'
     with source.open('w',newline='',encoding='utf-8') as handle:
         writer=csv.writer(handle)
-        writer.writerow(['PR_ID','SITE','RECORD_TYPE','DETAILED_DESCRIPTION','DATE_OPENED','DATE_CLOSED','Criticality','RESPONSIBLE_DEPARTMENT'])
-        writer.writerow(['001','Fictional Site','Deviation','AB-123; 20 mL','2026-01-03','2026-01-08','Major','Laboratory'])
-        writer.writerow(['001','Fictional Site','Deviation','duplicate','','','',''])
+        writer.writerow(['PR_ID','SITE','RECORD_TYPE','DETAILED_DESCRIPTION','DATE_OPENED','DATE_CLOSED','Criticality','RESPONSIBLE_DEPARTMENT','DATE_TO_CLOSE','STATUS','IS_CLOSED'])
+        writer.writerow(['001','Fictional Site','Deviation','AB-123; 20 mL','2026-01-03','2026-01-08','Major','Laboratory','2026-01-08','Closed - Done','1.0'])
+        writer.writerow(['001','Fictional Site','Deviation','duplicate','','','','','','',''])
     snapshot=import_snapshot(source,tmp_path/'sources')
     repo=SqliteRecordRepository(snapshot)
     assert repo.metadata()['accepted_rows']==repo.metadata()['quarantined_rows']==1
@@ -51,6 +51,9 @@ def test_source_snapshot_fields_dates_and_duplicates_are_preserved(tmp_path,monk
     row=result['records'][0]
     assert row['opened']=='2026-01-03' and row['daysOpen']==5
     assert row['criticality']=='Major' and row['department']=='Laboratory'
+    assert row['dueDate']==row['closedDate']=='2026-01-08' and row['dueStatus']=='closed_on_time'
+    assert result['clusters'][0]['parentTheme']
+    assert result['analysis']['deadlineAsOf']
     assert result['months']==['2026-01'] and row['monthCounts']=={'2026-01':1}
     payload['snapshot_id']='f'*64
     with patch.object(runs,'results',return_value=payload):different=dashboard.dataset('b'*32)
