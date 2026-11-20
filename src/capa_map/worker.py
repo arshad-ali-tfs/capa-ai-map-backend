@@ -124,7 +124,7 @@ def run(directory: Path):
             request['run_id'],
             Path(os.environ['MAP_ASSETS_DIR']).exists(),
             Path(os.environ.get('HF_HOME', '')).exists(),
-            Path(os.environ['CAPA_DATA_DIR']).exists(),
+            Path(os.environ.get('CAPA_DATA_DIR', directory.parent)).exists(),
         )
         frame, report = raw_to_filtered(source, limit=0,
             require_root_deviation=not request.get('allow_any_root', False),

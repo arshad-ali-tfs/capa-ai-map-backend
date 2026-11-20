@@ -4,19 +4,26 @@ import logging
 import os
 import re
 import time
+from urllib.parse import urlsplit
 from databricks import sql
 from databricks.sdk.core import Config
 from capa_map.infrastructure.contracts import SourceRecord
 
 logger = logging.getLogger(__name__)
-_cfg = Config()  # app service principal auth, provided automatically by Apps
 
 
 def _connect():
+    # Resolve the Apps service-principal configuration only when querying.
+    # The SQL connector expects a hostname; SDK Config.host includes https://.
+    config = Config()
+    host = config.host or ''
+    parsed = urlsplit(host if '://' in host else 'https://' + host)
+    if not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in {'', '/'}:
+        raise ValueError('DATABRICKS_HOST must identify the workspace host.')
     return sql.connect(
-        server_hostname=_cfg.host,
+        server_hostname=parsed.netloc,
         http_path=f"/sql/1.0/warehouses/{os.environ['DATABRICKS_WAREHOUSE_ID']}",
-        credentials_provider=lambda: _cfg.authenticate,
+        credentials_provider=lambda: config.authenticate,
     )
 
 

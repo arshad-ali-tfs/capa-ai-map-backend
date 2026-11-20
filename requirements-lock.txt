@@ -65,7 +65,7 @@ pydantic-core==2.50.4
 pygments==2.21.0
 pynndescent==0.6.0
 pytest==9.2.0
-python-dateutil==4.0.0
+python-dateutil==2.9.0.post0
 python-dotenv==1.2.4
 pytz==2026.6
 pyyaml==6.0.3
@@ -113,4 +113,4 @@ xxhash==4.1.0
 zstandard==0.25.0
 setuptools==84.2.1
 databricks-sql-connector>=4.9.0,<5
-databricks-sdk
+databricks-sdk>=0.89,<1

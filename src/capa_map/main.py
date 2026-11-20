@@ -145,7 +145,7 @@ def start_run(request: RunRequest):
     try:
         values = request.model_dump()
         result = runs.start(**values)
-        logger.info('map_run_request_accepted run_id=%s status=%s', result['run_id'], result['status'])
+        logger.info('map_run_request_accepted run_id=%s status=%s', result.get('run_id', ''), result.get('status', ''))
         return result
     except runs.RunBusyError as error:
         logger.warning('map_run_request_rejected reason=worker_already_active')
