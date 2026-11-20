@@ -139,11 +139,15 @@ def run(directory: Path):
         eligible_ids = set(frame.pr_id.astype(str))
         if request['pr_ids']:
             frame = frame.loc[frame.pr_id.astype(str).isin(request['pr_ids'])]
-        if request['limit'] > 0:
-            frame = frame.head(request['limit']).copy()
+        from capa_map.application.selection import select_records
+        strategy=request.get('selection_strategy','source_order')
+        pool_count=len(frame)
+        frame=select_records(frame,request['limit'],strategy)
         report.update(selected_rows=len(frame), requested_pr_ids=request['pr_ids'],
                       unmatched_or_ineligible_requested_pr_ids=sorted(set(request['pr_ids']) - eligible_ids),
-                      requested_limit=request['limit'], source_snapshot_id=snapshot_id)
+                      requested_limit=request['limit'], source_snapshot_id=snapshot_id,selection_pool_count=pool_count,
+                      selection_strategy='exact_ids' if request['pr_ids'] else strategy,
+                      selection_note='Sample proportions describe selected records, not population rates.')
         save(frame, directory / '01_dpd_closed_deviations.csv')
         save_json(report, directory / '01_filter_report.json')
         if frame.empty:
@@ -152,6 +156,12 @@ def run(directory: Path):
         llm = LiveLLM(directory / 'llm_cache')
         model = os.getenv('MAP_BGE_MODEL', 'BAAI/bge-large-en-v1.5')
         metadata = llm.metadata()
+        from prepare_assets import ARTIFACT_PREFIXES, locate, digest_file, MANIFEST
+        artifact_paths=[assets/MANIFEST,*[locate(assets,prefix,suffix) for prefix,suffix in ARTIFACT_PREFIXES.items()],
+                        assets/'MAP_DPD_500_Reference_Cluster_Results.csv',assets/'dpd_persisted_umap_row_ids.csv']
+        metadata['asset_sha256']={path.name:digest_file(path) for path in artifact_paths if path and path.is_file()}
+        metadata['selected_input_sha256']=hashlib.sha256(frame[['pr_id','detailed_description','investigation','conclusion']].fillna('').to_json(orient='records',force_ascii=False).encode()).hexdigest()
+        metadata['selection_strategy']=strategy
         metadata.update(source_snapshot_id=snapshot_id, source_mode=request.get('source_mode', 'historical'),
                         embedding_model=model, options={key: request.get(key, default) for key, default in
                         [('allow_any_root', False), ('allow_blank_description', False), ('include_dr_types', []),

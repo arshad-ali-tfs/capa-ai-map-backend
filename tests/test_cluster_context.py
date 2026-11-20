@@ -23,7 +23,7 @@ def test_current_context_is_primary_while_historical_names_and_content_are_retai
     result = dashboard.cluster_context(saved, RUN, 12)
     assert result['context'] == saved['proposalSummary']
     assert result['contextSource'] == 'current_analysis'
-    assert result['title'] == saved['historicalTitle'] and result['titleSource'] == 'historical'
+    assert result['title'] == saved['proposalTitle'] and result['titleSource'] == 'current_analysis'
     assert result['analysisContext'] == dict(title=saved['proposalTitle'], summary=saved['proposalSummary'], recordCount=12, runId=RUN)
     assert result['historicalContext'] == dict(title=saved['historicalTitle'], summary=saved['historicalSummary'])
     assert saved == before

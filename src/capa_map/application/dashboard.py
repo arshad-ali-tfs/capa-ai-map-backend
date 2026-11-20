@@ -11,7 +11,7 @@ from pathlib import Path
 import posixpath
 import re
 import sqlite3
-from . import annotations, runs, source_binding
+from . import annotations, runs, source_binding, curation, quality
 from ..infrastructure.storage import is_volume, local_file
 
 UNKNOWN = 'Not provided'
@@ -86,7 +86,9 @@ def source_context(payload):
                         if related:
                             capas.append({'id': identifier, 'description': title or UNKNOWN,
                                           'status': status or UNKNOWN, 'recordIds': related})
+                stamp=target.stat()
                 return {'fields': fields, 'capas': capas, 'metadata': metadata, 'available': True,
+                        'population':source_population(str(target),stamp.st_size,stamp.st_mtime_ns),
                         'resolution': 'verified_equivalent_export' if binding is not None else 'original_snapshot'}
     return csv_source_context(payload, snapshot_id, empty)
 
@@ -141,6 +143,12 @@ def csv_source_context(payload, snapshot_id, empty):
 
 
 @lru_cache(maxsize=4)
+def source_population(path,size,modified):
+    with closing(sqlite3.connect(Path(path).as_uri()+'?mode=ro',uri=True)) as connection:
+        return dict(connection.execute('SELECT record_type, COUNT(*) FROM records GROUP BY record_type'))
+
+
+@lru_cache(maxsize=4)
 def capa_rows(path, size, modified):
     """Cache only immutable relationship projections, invalidated by file identity."""
     with closing(sqlite3.connect(Path(path).as_uri() + '?mode=ro', uri=True)) as connection:
@@ -189,7 +197,7 @@ def cluster_context(group, run_id, record_count):
         historical = None
     historical_title = historical['title'] if historical and historical['title'].strip() else ''
     analysis_title = analysis['title'] if analysis and analysis['title'].strip() else ''
-    title = historical_title or analysis_title or f'Cluster {group["id"]}'
+    title = analysis_title or historical_title or f'Cluster {group["id"]}'
     if analysis and analysis['summary'].strip():
         context, source = analysis['summary'], 'current_analysis'
     elif historical and historical['summary'].strip():
@@ -197,7 +205,7 @@ def cluster_context(group, run_id, record_count):
     else:
         context, source = 'No saved summary is available for this cluster.', 'unavailable'
     return {'title': title, 'shortTitle': compact_title(title), 'subtitle': title,
-            'titleSource': 'historical' if historical_title else 'current_analysis' if analysis_title else 'unavailable',
+            'titleSource': 'current_analysis' if analysis_title else 'historical' if historical_title else 'unavailable',
             'context': context, 'contextSource': source, 'analysisContext': analysis, 'historicalContext': historical}
 
 
@@ -207,6 +215,10 @@ def dataset(run_id):
         raise runs.RunBusyError('This MAP analysis has not completed.')
     context = source_context(payload)
     saved = annotations.read(run_id) if 'CAPA_DATA_DIR' in os.environ else {}
+    try:
+        review_state=curation.read(run_id) if 'CAPA_DATA_DIR' in os.environ else curation.empty()
+    except FileNotFoundError:
+        review_state=curation.empty()
     records, months = [], set()
     missing_catalog_clusters = set()
     known_clusters = {str(group['id']) for group in payload['clusters'] if group['id'] is not None}
@@ -250,6 +262,7 @@ def dataset(run_id):
             # or substitute source metadata when a category is unavailable.
             'fiveWh': {key: row.get('fields', {}).get(key) or '' for key in runs.FIVEWH},
             'matchSignals': signals, 'similarity': row.get('similarity'), 'warnings': warnings,
+            'assignmentMargin':row.get('margin'),'secondClusterId':str(row['secondCluster']) if row.get('secondCluster') is not None else None,
             'annotation': saved.get(row['id'], annotations.empty()), 'volume': 1,
             'daysOpen': (closed-opened).days if opened and closed and closed >= opened else None,
             'monthCounts': {month:1} if month else {},
@@ -268,7 +281,8 @@ def dataset(run_id):
                          'match': round(sum(scores) / len(scores) * 100, 2) if scores else None,
                          'warnings': warnings,
                          'capas': [item for item in context['capas'] if ids.intersection(item['recordIds'])]})
-    return {'clusters': clusters, 'records': records, 'capas': context['capas'], 'months': sorted(months),
+    extra=quality.enrich(records,clusters,payload,context,review_state)
+    return {'clusters': clusters, 'records': records, 'capas': context['capas'], 'months': sorted(months),'review':extra['review'],
             'refreshedAt': payload.get('updated_at') or payload.get('created_at') or 'Not available',
             'analysis': {'runId': run_id, 'recordCount': len(records),
                          'sourceRecordCount': context['metadata'].get('accepted_rows'),
@@ -276,6 +290,7 @@ def dataset(run_id):
                          'resolvedSnapshotId': context['metadata'].get('snapshot_id'),
                          'sourceResolution': context.get('resolution', 'unavailable'),
                          'sourceAvailable': context['available'], 'sourceMode': payload.get('source_mode', 'historical'),
+                         'coverage':extra['coverage'],'provenance':extra['provenance'],
                          'selection': 'configured' if os.getenv('MAP_DASHBOARD_RUN_ID', '').strip() else 'latest_completed'}}
 
 

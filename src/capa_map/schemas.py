@@ -69,6 +69,11 @@ class DeviationRecord(Contract):
     volume: int = Field(gt=0)
     daysOpen: int | None
     monthCounts: dict[str, int]
+    originalClusterId: str = ''
+    assignmentReview: dict | None = None
+    sourceMentions: list[dict] = Field(default_factory=list)
+    assignmentMargin: float | None = None
+    secondClusterId: str | None = None
 
 
 class HistoricalClusterContext(Contract):
@@ -89,11 +94,16 @@ class Cluster(Contract):
     match: float | None
     context: str
     contextSource: Literal['current_analysis', 'historical', 'unavailable']
-    titleSource: Literal['current_analysis', 'historical', 'unavailable']
+    titleSource: Literal['current_analysis', 'historical', 'unavailable', 'reviewed']
     analysisContext: AnalysisClusterContext | None
     historicalContext: HistoricalClusterContext | None
     warnings: list[str]
     capas: list[CapaRelationship]
+    parentTheme: str = 'Other / needs classification'
+    reviewStatus: Literal['needs_review','reviewed'] = 'needs_review'
+    themeSource: Literal['suggested','reviewed'] = 'suggested'
+    reviewedContext: HistoricalClusterContext | None = None
+    membershipChanged: bool = False
 
 
 class AnalysisCoverage(Contract):
@@ -106,6 +116,8 @@ class AnalysisCoverage(Contract):
     sourceAvailable: bool
     sourceMode: str
     selection: Literal['configured', 'latest_completed']
+    coverage: dict = Field(default_factory=dict)
+    provenance: dict = Field(default_factory=dict)
 
 
 class MapDataset(Contract):
@@ -115,3 +127,4 @@ class MapDataset(Contract):
     months: list[str]
     refreshedAt: str
     analysis: AnalysisCoverage
+    review: dict = Field(default_factory=dict)
