@@ -1,3 +1,4 @@
+from datetime import date
 import csv
 from io import StringIO
 import mimetypes
@@ -10,7 +11,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
 from capa_map.infrastructure.web import create_service
 from .application import annotations, runs, curation
-from .schemas import Annotation, AnnotationCollection, MapDataset
+from .schemas import Annotation, AnnotationCollection, MapDataset, DeviationInsights
 from filelock import Timeout
 
 app = create_service('map')
@@ -292,6 +293,18 @@ def download_results(run_id: str, kind: str = 'draft'):
         target = runs.download(run_id, kind)
         media = mimetypes.guess_type(target.name)[0] or 'application/octet-stream'
         return FileResponse(target, media_type=media, filename=target.name)
+    except runs.RunBusyError as error:
+        raise HTTPException(409, detail=str(error)) from error
+    except (ValueError, FileNotFoundError) as error:
+        missing(error)
+
+
+@app.get('/api/v1/map/runs/{run_id}/insights', response_model=DeviationInsights)
+def deviation_insights(run_id: str, as_of: date | None = None):
+    """Rank the complete verified source, separately from the analysed sample."""
+    from .application import insights
+    try:
+        return insights.for_run(run_id, as_of)
     except runs.RunBusyError as error:
         raise HTTPException(409, detail=str(error)) from error
     except (ValueError, FileNotFoundError) as error:
